@@ -9,6 +9,7 @@ bin/
 resources-fenix7pro/
 output/
 node_modules/
+.vercel/
 .env
 .env.*
 !.env.example

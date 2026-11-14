@@ -40,9 +40,12 @@ class MomoCalendarClient {
     function isDemoServer() as Boolean {
         var url = getServerUrl();
         var suffix = ".trycloudflare.com";
+        var hosted = ".vercel.app";
         return url.equals("http://127.0.0.1:8787") || url.equals("http://localhost:8787") ||
             (url.length() > suffix.length() + 8 && url.substring(0, 8).equals("https://") &&
-            url.substring(url.length() - suffix.length(), url.length()).equals(suffix));
+            url.substring(url.length() - suffix.length(), url.length()).equals(suffix)) ||
+            (url.length() > hosted.length() + 8 && url.substring(0, 8).equals("https://") &&
+            url.substring(url.length() - hosted.length(), url.length()).equals(hosted));
     }
 
     function hasToken() as Boolean {
@@ -69,6 +72,43 @@ class MomoCalendarClient {
 
     function createActivity(slotId as String, callback as Method) as Void {
         request("activities", {"slotId" => slotId}, callback, true);
+    }
+
+    function suggestions(callback as Method) as Void {
+        request("suggestions", {"context" => MomoActivityTracker.context(isDemoServer())}, callback, true);
+    }
+
+    function status(callback as Method) as Void {
+        request("status", {}, callback, true);
+    }
+
+    function onboarding(callback as Method) as Void {
+        request("onboarding", {}, callback, true);
+    }
+
+    function decide(suggestionId as String, decision as String, callback as Method) as Void {
+        request("decide", {"suggestionId" => suggestionId, "decision" => decision}, callback, true);
+    }
+
+    function startActivity(activityId as String, callback as Method) as Void {
+        request("start", {"activityId" => activityId}, callback, true);
+    }
+
+    function completeActivity(activityId as String, source as String, steps as Number, elapsedSeconds as Number, callback as Method) as Void {
+        request("complete", {"activityId" => activityId, "source" => source, "steps" => steps, "elapsedSeconds" => elapsedSeconds}, callback, true);
+    }
+
+    function feedback(activityId as String, helpful as String, callback as Method) as Void {
+        request("feedback", {"activityId" => activityId, "helpful" => helpful}, callback, true);
+    }
+
+    function getAccessToken() as String {
+        if (isDemoServer()) {
+            var value = WatchUi.loadResource(Rez.Strings.CalendarBuildAccessToken) as String;
+            return value.length() > 0 ? value : "momo-demo";
+        }
+        var token = Application.Storage.getValue("calendarToken");
+        return token instanceof String ? token : "";
     }
 
     function getMode() as String {
@@ -104,7 +144,7 @@ class MomoCalendarClient {
         body["action"] = action;
         var headers = {"Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON};
         if (authenticated) {
-            var token = isDemoServer() ? "momo-demo" : Application.Storage.getValue("calendarToken");
+            var token = getAccessToken();
             if (!(token instanceof String) || !hasToken()) {
                 _callback = null;
                 callback.invoke(401, {"error" => "unpaired", "message" => "Pair your watch again."});

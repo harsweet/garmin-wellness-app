@@ -27,37 +27,65 @@ class MomoCalendarSmokeApp extends Application.AppBase {
 }
 class MomoCalendarSmokeView extends WatchUi.View {
     var client;
-    var slotId;
+    var suggestionId;
+    var activity;
     function initialize() { View.initialize(); client = new MomoCalendarClient(); }
     function onShow() {
         if (!client.getServerUrl().equals("${endpoint.url}")) {
             fail("saved HTTP setting overrode the current HTTPS demo URL"); return;
         }
         System.println("CALENDAR_SMOKE: current HTTPS URL overrides saved HTTP setting");
-        client.availability(method(:gotSlots));
+        client.onboarding(method(:gotOnboarding));
     }
     function fail(message) { System.println("CALENDAR_SMOKE_FAIL: " + message); System.exit(); }
-    function gotSlots(code, data) {
-        if (code != 200 || data == null || !data["mode"].equals("demo") || data["slots"] == null || data["slots"].size() == 0) {
-            fail("availability code=" + code); return;
+    function gotOnboarding(code, data) {
+        if (code != 200 || data == null || !(data["qr"] instanceof Array) || data["qr"].size() < 21) {
+            fail("onboarding code=" + code); return;
         }
-        System.println("CALENDAR_SMOKE: received demo availability over HTTP");
-        slotId = data["slots"][0]["id"];
-        // This automated test creates only a local fixture event.
-        client.createActivity(slotId, method(:created));
+        System.println("CALENDAR_SMOKE: received scannable onboarding QR rows");
+        client.suggestions(method(:gotSuggestion));
+    }
+    function gotSuggestion(code, data) {
+        if (code != 200 || data == null || !(data["suggestion"] instanceof Dictionary)) {
+            fail("suggestions code=" + code + "; finish any pending demo activity first"); return;
+        }
+        suggestionId = data["suggestion"]["id"];
+        System.println("CALENDAR_SMOKE: suggestion source=" + data["aiSource"]);
+        // This explicit automated test accepts only a local demo activity.
+        client.decide(suggestionId, "accept", method(:created));
     }
     function created(code, data) {
         if (code != 200 || data == null || !data["status"].equals("created") || !data["mode"].equals("demo")) {
             fail("create code=" + code); return;
         }
+        activity = data["activity"];
         System.println("CALENDAR_SMOKE: created local demo walk");
-        client.createActivity(slotId, method(:retried));
+        client.decide(suggestionId, "accept", method(:retried));
     }
     function retried(code, data) {
         if (code != 200 || data == null || !data["status"].equals("already_created")) {
             fail("idempotent retry code=" + code); return;
         }
-        System.println("CALENDAR_SMOKE_PASS: availability, create, duplicate retry");
+        client.startActivity(activity["id"], method(:started));
+    }
+    function started(code, data) {
+        if (code != 200 || data == null || !(data["activity"] instanceof Dictionary)) {
+            fail("start code=" + code); return;
+        }
+        var source = activity["tracking"].equals("steps") ? "simulated_steps" : "simulated_timer";
+        client.completeActivity(activity["id"], source, activity["stepTarget"], activity["durationMinutes"] * 60, method(:completed));
+    }
+    function completed(code, data) {
+        if (code != 200 || data == null || !data["status"].equals("completed")) {
+            fail("complete code=" + code); return;
+        }
+        client.feedback(activity["id"], "yes", method(:rated));
+    }
+    function rated(code, data) {
+        if (code != 200 || data == null || !data["status"].equals("recorded")) {
+            fail("feedback code=" + code); return;
+        }
+        System.println("CALENDAR_SMOKE_PASS: QR, suggestion, accept, retry, start, simulated completion, feedback");
         System.exit();
     }
 }
@@ -73,7 +101,7 @@ const child = spawn(path.join(sdk, 'bin/monkeydo'), [path.join(root, 'bin/Momo-c
 let log = '';
 child.stdout.on('data', chunk => { log += chunk; process.stdout.write(chunk); });
 child.stderr.on('data', chunk => { log += chunk; process.stderr.write(chunk); });
-const timeout = setTimeout(() => child.kill('SIGTERM'), 45_000);
+const timeout = setTimeout(() => child.kill('SIGTERM'), 60_000);
 child.on('exit', () => {
   clearTimeout(timeout);
   process.exitCode = log.includes('CALENDAR_SMOKE_PASS:') && !log.includes('CALENDAR_SMOKE_FAIL:') ? 0 : 1;

@@ -2,8 +2,7 @@ import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { DemoCalendar } from '../backend/demo-calendar.mjs';
-import { createDemoServer } from '../backend/server.mjs';
+import { createRuntime } from '../backend/runtime.mjs';
 import { configureCalendarUrl } from './calendar-url.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -27,15 +26,15 @@ try {
   await chmod(executable, 0o755);
 }
 
-const calendar = new DemoCalendar({ stateFile: path.join(root, '.local/demo-calendar.json'), timeZone: process.env.MOMO_TIME_ZONE || 'America/Edmonton' });
-await calendar.load();
-const server = createDemoServer(calendar);
+const { server, provider, deviceToken, onboarding } = await createRuntime(root);
 await new Promise((resolve, reject) => {
   server.once('error', reject);
   server.listen(8787, '127.0.0.1', resolve);
 });
 console.log('Local DEMO calendar: http://127.0.0.1:8787');
-console.log('Starting a temporary public HTTPS URL for sample data only…');
+console.log(provider.isConfigured() ? 'Grok key configured; live suggestions will be labeled Grok when successful.' : 'No Grok key configured; suggestions use a labeled scripted fallback.');
+console.log('Open http://127.0.0.1:8787 to personalize Momo.');
+console.log('Starting an authenticated HTTPS connection for the watch…');
 const child = spawn(executable, ['tunnel', '--url', 'http://127.0.0.1:8787', '--http-host-header', '127.0.0.1:8787', '--no-autoupdate', '--protocol', 'http2'], { stdio: ['ignore', 'pipe', 'pipe'] });
 let started = false;
 let tail = '';
@@ -52,7 +51,8 @@ async function onOutput(chunk) {
   const match = tail.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
   if (!match || started) return;
   started = true;
-  const url = await configureCalendarUrl(match[0]);
+  const url = await configureCalendarUrl(match[0], { token: deviceToken });
+  onboarding.setPublicOrigin(url);
   const deadline = Date.now() + 120_000;
   let lastError = '';
   console.log('Waiting for the temporary HTTPS address to become reachable…');
@@ -72,7 +72,7 @@ async function onOutput(chunk) {
   }
   while (Date.now() < deadline && !finished) {
     try {
-      const response = await fetch(`${url}/api/demo`, { signal: AbortSignal.timeout(2000) });
+      const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(2000) });
       const result = await response.json();
       if (response.ok && result.mode === 'demo') {
         console.log(`\nHTTPS demo ready: ${url}`);

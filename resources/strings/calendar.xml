@@ -1,4 +1,5 @@
 <strings>
     <string id="CalendarServerTitle">Google Calendar script URL</string>
     <string id="CalendarBuildServerUrl"></string>
+    <string id="CalendarBuildAccessToken"></string>
 </strings>

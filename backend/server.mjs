@@ -1,12 +1,11 @@
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { timingSafeEqual } from 'node:crypto';
 import { DemoCalendar, CalendarError } from './demo-calendar.mjs';
-
-const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Momo demo calendar</title><style>
-*{box-sizing:border-box}body{margin:0;background:#0d1020;color:#f4f3ec;font:16px system-ui,sans-serif}main{max-width:760px;margin:64px auto;padding:24px}small{color:#e7de8b;letter-spacing:.14em}h1{font-size:42px;letter-spacing:-.04em;margin-bottom:8px}p{color:#b2b7c8;line-height:1.6}article{border:1px solid #30364b;background:#171c2d;border-radius:18px;padding:24px;margin-top:28px}ul{list-style:none;padding:0}li{display:flex;gap:24px;justify-content:space-between;padding:17px 0;border-bottom:1px solid #30364b}li:last-child{border:0}time{color:#9bdec4;white-space:nowrap}code{background:#272d42;padding:3px 7px;border-radius:6px}footer{font-size:13px;color:#828ba3;margin-top:24px}</style><main><small>MOMO / DEMO CALENDAR</small><h1>A little room to escape.</h1><p>This is a local sample calendar. Accepted walks appear here; your Google Calendar stays untouched.</p><article><strong id="heading">Loading the demo day…</strong><ul id="events"></ul></article><p>In the fēnix simulator, <strong>hold UP</strong> to open Calendar. Choose a slot with UP / DOWN, press START, then confirm.</p><footer>Refreshes every 3 seconds. Times shown in <span id="zone"></span>. Restarting the service refreshes sample meetings; saved demo walks persist.</footer></main><script>
-async function update(){try{const response=await fetch('/api/demo');if(!response.ok)throw Error();const data=await response.json();document.getElementById('zone').textContent=data.timeZone;document.getElementById('heading').textContent=data.activities+' demo walk'+(data.activities===1?'':'s')+' scheduled';const list=document.getElementById('events');list.replaceChildren();for(const event of data.events){const row=document.createElement('li');const title=document.createElement('span');title.textContent=event.title;const time=document.createElement('time');const options={timeZone:data.timeZone,hour:'numeric',minute:'2-digit'};time.textContent=new Date(event.start).toLocaleTimeString([],options)+' – '+new Date(event.end).toLocaleTimeString([],options);row.append(title,time);list.append(row)}}catch{document.getElementById('heading').textContent='Demo service is offline. Restart npm run calendar:demo.'}}update();setInterval(update,3000);
-</script></html>`;
+import { WellnessService } from './wellness-service.mjs';
+import { OnboardingService, ONBOARDING_COOKIE } from './onboarding.mjs';
 
 function json(response, data, status = 200) {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -14,46 +13,112 @@ function json(response, data, status = 200) {
 }
 
 async function readBody(request) {
+  // Vercel's Node helpers may have parsed the body before this handler runs.
+  if (request.body !== undefined) {
+    let parsed = request.body;
+    try {
+      if (typeof parsed === 'string' || Buffer.isBuffer(parsed)) parsed = JSON.parse(parsed.toString());
+      if (Buffer.byteLength(JSON.stringify(parsed)) > 16_384) throw new CalendarError(413, 'too_large', 'Request too large.');
+      return parsed;
+    } catch (error) {
+      if (error instanceof CalendarError) throw error;
+      throw new CalendarError(400, 'invalid_json', 'Invalid request.');
+    }
+  }
   let body = '';
   for await (const chunk of request) {
     body += chunk;
-    if (body.length > 16_384) throw new CalendarError(413, 'too_large', 'Request too large.');
+    if (Buffer.byteLength(body) > 16_384) throw new CalendarError(413, 'too_large', 'Request too large.');
   }
   try { return JSON.parse(body); } catch { throw new CalendarError(400, 'invalid_json', 'Invalid request.'); }
 }
 
-export function createDemoServer(calendar = new DemoCalendar()) {
+function tokenMatches(value, expected) {
+  if (typeof value !== 'string' || typeof expected !== 'string') return false;
+  const a = Buffer.from(value), b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function isLocalBrowser(request) {
+  const address = request.socket.remoteAddress;
+  return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address) && !['cf-connecting-ip', 'x-forwarded-for', 'forwarded', 'x-forwarded-host'].some(header => request.headers[header] !== undefined);
+}
+
+const STATIC_FILES = {
+  '/': ['index.html', 'text/html; charset=utf-8'],
+  '/onboard': ['index.html', 'text/html; charset=utf-8'],
+  '/style.css': ['style.css', 'text/css; charset=utf-8'],
+  '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/momo.jpg': ['momo.jpg', 'image/jpeg']
+};
+
+export function createDemoServer(calendar = new DemoCalendar(), { wellness = new WellnessService(calendar), deviceToken = 'momo-demo', publicOrigin = '', onboarding = new OnboardingService(calendar, { publicOrigin }), allowLocalSetup = true } = {}) {
   return http.createServer(async (request, response) => {
     try {
       const host = request.headers.host || '';
-      if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) return json(response, { error: 'invalid_host' }, 403);
-      if (request.headers.origin && ![`http://${host}`].includes(request.headers.origin)) return json(response, { error: 'invalid_origin' }, 403);
+      const localHost = /^(127\.0\.0\.1|localhost):\d+$/.test(host);
+      const configuredOrigin = onboarding.getPublicOrigin();
+      const publicHost = configuredOrigin ? new URL(configuredOrigin).host : null;
+      if (!localHost && host !== publicHost) return json(response, { error: 'invalid_host' }, 403);
+      const origin = request.headers.origin;
+      const allowedOrigin = value => value === configuredOrigin || (localHost && value === `http://${host}`);
+      if (origin && !allowedOrigin(origin)) return json(response, { error: 'invalid_origin' }, 403);
       const pathname = new URL(request.url, `http://${host}`).pathname;
-      if (request.method === 'GET' && pathname === '/') {
-        response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
-        return response.end(html);
+      if (request.method === 'GET' && pathname === '/health') return json(response, { mode: 'demo', ready: true });
+      if (request.method === 'GET' && pathname in STATIC_FILES) {
+        const [filename, mime] = STATIC_FILES[pathname];
+        try {
+          const content = await readFile(new URL(`./public/${filename}`, import.meta.url));
+          response.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" });
+          return response.end(content);
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+          return json(response, { error: 'setup_unavailable', message: 'Momo setup files are not installed.' }, 404);
+        }
       }
-      if (request.method === 'GET' && pathname === '/api/demo') {
-        return json(response, { ...calendar.status(), activities: calendar.activities.length, events: calendar.allEvents().map(event => ({ ...event, start: new Date(event.start).toISOString(), end: new Date(event.end).toISOString() })) });
+      if (request.method === 'POST' && pathname === '/api/onboarding/claim') {
+        if (!origin || !allowedOrigin(origin) || request.headers['x-momo-request'] !== '1') return json(response, { error: 'invalid_origin' }, 403);
+        const body = await readBody(request);
+        const claimed = await onboarding.claim(body?.key);
+        const secure = origin.startsWith('https:') ? '; Secure' : '';
+        response.setHeader('Set-Cookie', `${ONBOARDING_COOKIE}=${claimed.sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`);
+        return json(response, { status: 'claimed', profileConfigured: claimed.profileConfigured, expiresAt: new Date(claimed.expiresAt).toISOString() });
+      }
+      if (pathname === '/api/profile' || pathname === '/api/demo') {
+        if (!(allowLocalSetup && isLocalBrowser(request)) && !onboarding.authenticate(request.headers.cookie)) return json(response, { error: 'setup_required', message: 'Scan Momo to connect this browser.' }, 401);
+        if (request.method === 'GET' && pathname === '/api/profile') return json(response, wellness.getProfile());
+        if (request.method === 'POST' && pathname === '/api/profile') {
+          if (!origin || !allowedOrigin(origin) || request.headers['x-momo-request'] !== '1') return json(response, { error: 'invalid_origin' }, 403);
+          return json(response, await wellness.saveProfile(await readBody(request)));
+        }
+        if (request.method === 'GET' && pathname === '/api/demo') return json(response, { ...calendar.status(), activities: calendar.activities.length, events: calendar.allEvents().map(event => ({ ...event, start: new Date(event.start).toISOString(), end: new Date(event.end).toISOString() })), wellness: wellness.dashboard() });
+        return json(response, { error: 'not_found' }, 404);
       }
       if (request.method !== 'POST' || !['/', '/api'].includes(pathname)) return json(response, { error: 'not_found' }, 404);
       const body = await readBody(request);
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CalendarError(400, 'invalid_body', 'Invalid request.');
-      if (body.action === 'pair') {
+      // Legacy demo pairing is allowed only with fixture credentials. A private
+      // runtime token must never be disclosed through the public pairing route.
+      if (body.action === 'pair' && deviceToken === 'momo-demo') {
         if (body.code !== '000000') throw new CalendarError(401, 'invalid_code', 'Demo code is 000000.');
         return json(response, { token: 'momo-demo', mode: 'demo' });
       }
-      if (body.token !== 'momo-demo') throw new CalendarError(401, 'unauthorized', 'Use the demo connection.');
-      if (body.action === 'status') return json(response, calendar.status());
+      if (!tokenMatches(body.token, deviceToken)) throw new CalendarError(401, 'unauthorized', 'Reconnect the latest Momo build.');
+      if (body.action === 'onboarding') return json(response, await onboarding.issue());
+      if (body.action === 'status') return json(response, wellness.status());
       if (body.action === 'availability') return json(response, calendar.availability());
       if (body.action === 'activities') {
         if (typeof body.slotId !== 'string') throw new CalendarError(400, 'invalid_slot', 'Choose a suggested slot.');
         return json(response, await calendar.book(body.slotId));
       }
+      if (body.action === 'suggestions') return json(response, await wellness.suggestions(body));
+      if (body.action === 'decide') return json(response, await wellness.decide(body));
+      if (body.action === 'start') return json(response, await wellness.start(body));
+      if (body.action === 'complete') return json(response, await wellness.complete(body));
+      if (body.action === 'feedback') return json(response, await wellness.feedback(body));
       throw new CalendarError(400, 'invalid_action', 'Unknown calendar action.');
     } catch (error) {
-      // Match Apps Script's JSON error contract, including HTTP 200 transport responses.
-      json(response, { mode: 'demo', error: error.error || 'internal_error', message: error instanceof CalendarError ? error.message : 'Demo calendar unavailable.', httpStatus: error.httpStatus || 500 });
+      json(response, { mode: 'demo', error: error.error || 'internal_error', message: error instanceof CalendarError ? error.message : 'Momo is unavailable. Try again shortly.', httpStatus: error.httpStatus || 500 });
     }
   });
 }

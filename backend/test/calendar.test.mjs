@@ -87,7 +87,7 @@ test('actual HTTP contract supports watch requests and calendar page updates', a
   const events = await (await fetch(`${base}/api/demo`)).json();
   assert.equal(events.activities, 1);
   assert.ok(events.events.some(event => event.title === 'Momo: 8-minute walk'));
-  assert.match(await (await fetch(base)).text(), /Momo demo calendar/);
+  assert.equal((await (await fetch(`${base}/health`)).json()).ready, true);
   const crossOrigin = await fetch(base, { method: 'POST', headers: { Origin: 'https://unrelated.example' }, body: '{}' });
   assert.equal(crossOrigin.status, 403);
 });

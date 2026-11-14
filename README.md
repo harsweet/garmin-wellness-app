@@ -1,71 +1,77 @@
 # Momo
 
-A native Connect IQ app for the **fēnix 7 Pro**, featuring three moods of Momo and playful, stubbed remarks about the day.
+A native **fēnix 7 Pro / Connect IQ** wellness companion with phone onboarding and a Node backend. The calendar contains demo meetings; calendar writes and completion simulations are labeled **DEMO**.
 
-Momo's three moods and remarks remain demo content. The calendar now uses sample meetings and saved walking breaks through a demo service. The app requests Communications permission for that connection. AI, real sensor readings, Google account access, notifications, and activity verification remain outside this demo.
+## Run locally
 
-## Calendar demo — no Google account needed
+Requires Node 22+, Garmin Connect IQ SDK 9.1.0, its fēnix 7 Pro device profile, and a Garmin developer key.
 
-Requires Node 22+ and the Garmin SDK. Start the calendar in one terminal:
+```sh
+npm install
+cp .env.example .env
+```
+
+Keep an existing `.env` rather than overwriting it. Set `XAI_API_KEY` there to enable Grok; `XAI_MODEL` defaults to `grok-4.7`. Without a key, or when the provider fails, Momo uses **SCRIPTED** suggestions. Keys stay on the server and are excluded from Git.
+
+Start the service in one terminal:
 
 ```sh
 npm run calendar:demo
 ```
 
-Wait for **HTTPS demo ready**, then launch the watch in a second terminal:
+Wait for **HTTPS demo ready**, then launch the watch in another:
 
 ```sh
 ./scripts/ciq.sh run
 ```
 
-**Hold UP** on Momo to open Calendar. Use UP / DOWN to select one of three available eight-minute walks, press START, and confirm. The walk is added only after confirmation. View the sample meetings and saved walks at http://127.0.0.1:8787; it updates automatically.
+Garmin requires HTTPS, so the local command starts a temporary Cloudflare Tunnel and configures the watch build automatically. It downloads `cloudflared` on the first macOS run; an existing binary can be supplied through `CLOUDFLARED`. Keep the service running. Restarting it changes the temporary hostname, so rebuild the watch afterward. Generated settings and the separate watch access token live in gitignored `.local/` and `resources-fenix7pro/`; saved simulator settings cannot override the current generated URL.
 
-Garmin rejects plain HTTP requests, including in the simulator. The demo command downloads Cloudflare's `cloudflared` helper on its first macOS run and creates a temporary public HTTPS URL serving only sample calendar data. No Google account or Cloudflare account is required. The URL lasts while the demo command runs and changes on restart, so rebuild/relaunch the watch after restarting it. An installed helper can be specified with `CLOUDFLARED`.
+## Try the full experience
 
-The default time zone is America/Edmonton; set `MOMO_TIME_ZONE` before starting the demo to change it. Suggestions are between 08:00 and 20:00, include two-minute buffers, and expire after ten minutes. New conflicts are checked before saving; retries cannot duplicate a saved walk. Walks persist in `.local/demo-calendar.json`, and sample meetings are refreshed on service startup. Momo shows a **DEMO CALENDAR** badge throughout. These events do not touch Google Calendar.
+1. Momo starts with a QR code. Scan it with your phone, or use the local setup page at http://127.0.0.1:8787.
+2. Choose a nickname, goals, preferred activities, maximum break length, reminder hours, time zone, humor level, and seated-only preference.
+3. Save the profile. While the QR screen is visible, the watch checks every ten seconds and returns to Momo when setup is complete. START checks immediately; BACK skips for now.
+4. **Hold UP** on Momo for a personalized activity. UP/DOWN switches detail pages; START offers **Let's go**, **Later**, or **Something else**.
+5. Accepting requires confirmation before adding a demo calendar event. Later snoozes suggestions for thirty minutes. Alternatives avoid repeating the activity where possible.
+6. Start the accepted activity. The watch tracks foreground time and observed daily-step deltas. Hold UP during a demo activity for **Simulate finish**, or explicitly self-report completion.
+7. Answer whether it helped. Acceptance, completion, snooze, and helpfulness counts influence future activity ranking.
 
-The generated URL override lives in gitignored `resources-fenix7pro/`. Generated builds use that embedded URL ahead of saved app settings, so old HTTP addresses or expired demo URLs cannot override a newly built demo. Builds without an embedded URL use the editable calendar URL setting. The standalone Google Apps Script bridge in `integrations/google-calendar/` is preparation for a later live-account phase; it is not used or live-tested by this demo.
+Walking, gentle stretching, breathing, and quiet rest are supported. Profile constraints and calendar conflicts determine eligible choices; Grok chooses among them and writes a short, humorous line. It cannot invent arbitrary activities or book anything without acceptance. Meeting titles are excluded from the model prompt. Recommendations are cached and provider requests throttled.
 
-## Run
+Phone QR links are one-time, expire after ten minutes, and grant a scoped browser session. That session can edit the profile and read its dashboard, but cannot invoke paid AI calls or impersonate the watch. Profiles, feedback, and demo bookings remain on the backend.
 
-Install Garmin's Connect IQ SDK, its fēnix 7 Pro device profile, and a Java runtime. Select an SDK in SDK Manager, then run:
+The three home-screen moods and their day remarks remain selectable demo states. Activity tracking pauses when its screen is hidden; this version does not provide background tracking, sleep analysis, or verified health outcomes. Simulator completion evidence is labeled simulated. Suggestions are requested in the app; all-day background notifications are not implemented.
+
+## Deploy to Vercel
+
+Use **one Vercel project + Upstash Redis**. The function serves the phone UI and watch API; Redis persists profiles, QR sessions, suggestions, demo meetings, bookings, and feedback across cold starts. This prototype has one watch/profile per deployment.
+
+1. Import this GitHub repository into Vercel. Select **Other** as the framework preset and the repository root as the root directory. `vercel.json` routes requests to `api/index.mjs`.
+2. Add **Upstash Redis** through the project's Storage/Marketplace integration and connect it to the project. The adapter accepts `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`, or legacy `KV_REST_API_URL` / `KV_REST_API_TOKEN` names.
+3. Add `XAI_API_KEY`, optional `XAI_MODEL`, and `MOMO_DEVICE_TOKEN` to Vercel's server environment. For the device token, use the value generated in your local `.local/demo-device-token` so it matches your watch build. The Grok key must never go in watch resources.
+4. Set `MOMO_PUBLIC_URL` to the stable production HTTPS URL, then redeploy. Otherwise the adapter uses Vercel's system production URL. Use the public production deployment; Vercel login protection must allow the watch's API requests. Momo authenticates its own requests.
+5. Configure that deployment URL locally and rebuild:
 
 ```sh
-./scripts/ciq.sh build
+node scripts/calendar-url.mjs https://your-project.vercel.app
 ./scripts/ciq.sh run
 ```
 
-The build is written to `bin/Momo.prg`. The run command opens the Garmin simulator and launches the fēnix 7 Pro app. Its terminal process remains attached while the app runs.
+If changing `MOMO_DEVICE_TOKEN`, update the local `.env` with the same value before configuring/rebuilding. The deployment fails closed when credentials or persistent storage are missing. Redis leases prevent concurrent function instances from duplicating writes. Neither Vercel nor Upstash credentials are needed for the local file-backed demo.
 
-The script uses the SDK selected in `~/Library/Application Support/Garmin/ConnectIQ/current-sdk.cfg`. Override it with `CIQ_SDK_PATH`. For signing, it uses `CIQ_DEVELOPER_KEY`, an existing `~/Documents/developer_key`, or generates a private, gitignored development key under `.local/`.
+Deployment configuration and mocked cold-start/storage tests are included. A live Vercel deployment still requires your Vercel project and Redis connection; a live Grok call requires a filled API key.
 
-The VS Code tasks provide the same build/run/test commands. The optional Monkey C launch configuration requires Garmin's Monkey C extension and its developer-key setting.
+References: [Vercel storage integrations](https://vercel.com/docs/marketplace-storage), [Upstash Vercel setup](https://upstash.com/docs/redis/howto/vercelintegration), [xAI Responses API](https://docs.x.ai/developers/rest-api-reference/inference/responses).
 
-## Controls
-
-- **UP / DOWN:** cycle through sleepy, chill, and thriving Momo.
-- **START / tap Momo:** show another stubbed remark.
-- **Swipe:** change mood.
-- **Tap a bottom dot:** choose a mood directly.
-- **Hold UP:** open Calendar.
-- **Hold the screen:** open the controls/help screen.
-- **BACK:** close help or exit the app.
-
-The three character images in `assets/momo/` are the supplied originals. Garmin's resource compiler scales them for the watch display.
-
-## Tests
-
-```sh
-./scripts/ciq.sh test
-```
-
-This builds and runs the Monkey C tests in the fēnix 7 Pro simulator, with results in `bin/test-results.log`. SDK 9.1.0 sometimes returns a nonzero exit code after passing tests; the script requires the runner's explicit passing summary.
-
-Calendar checks:
+## Verification
 
 ```sh
 npm run calendar:test
+./scripts/ciq.sh test
 npm run calendar:smoke
 ```
 
-The smoke test requires the demo service to be running. It launches a separate native test app in the simulator and uses the actual watch networking client to fetch slots, save one **demo** walk, and retry the same request. It intentionally adds one sample walk to the demo calendar. It refuses live Google URLs.
+The Node tests cover calendar conflicts, personalization, model validation/fallback, QR access, and serverless persistence. Native tests use the simulator's fonts and graphics to verify screens, controls, QR geometry, confirmation, timers, and step resets. The smoke test requires the local demo to run and intentionally creates/completes a demo activity; it refuses live Google URLs.
+
+`./scripts/ciq.sh build` creates `bin/Momo.prg`. Build artifacts, `.env`, generated connection settings, local state, and signing keys are ignored by Git. The standalone Google Apps Script bridge under `integrations/google-calendar/` is preparation for a later real-calendar phase and is not used by this demo.

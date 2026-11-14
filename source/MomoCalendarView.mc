@@ -2,7 +2,7 @@ import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-class MomoCalendarView extends WatchUi.View {
+class MomoLegacyCalendarView extends WatchUi.View {
     private var _client as MomoCalendarClient;
     private var _loaded as Boolean = false;
     private var _state as Symbol = :unpaired;
@@ -87,7 +87,7 @@ class MomoCalendarView extends WatchUi.View {
                 if (_mode.equals("demo")) {
                     question = "Save a DEMO walk?\n" + label;
                 }
-                WatchUi.pushView(new WatchUi.Confirmation(question), new MomoCalendarConfirmationDelegate(self), WatchUi.SLIDE_LEFT);
+                WatchUi.pushView(new WatchUi.Confirmation(question), new MomoLegacyCalendarConfirmationDelegate(self), WatchUi.SLIDE_LEFT);
             }
         } else if (_pendingSlot != null) {
             // Retries use the original server-issued slot ID, avoiding duplicates.
@@ -265,10 +265,10 @@ class MomoCalendarView extends WatchUi.View {
     }
 }
 
-class MomoCalendarDelegate extends WatchUi.BehaviorDelegate {
-    private var _view as MomoCalendarView;
+class MomoLegacyCalendarDelegate extends WatchUi.BehaviorDelegate {
+    private var _view as MomoLegacyCalendarView;
 
-    function initialize(view as MomoCalendarView) {
+    function initialize(view as MomoLegacyCalendarView) {
         BehaviorDelegate.initialize();
         _view = view;
     }
@@ -288,9 +288,9 @@ class MomoCalendarDelegate extends WatchUi.BehaviorDelegate {
     }
 }
 
-class MomoCalendarConfirmationDelegate extends WatchUi.ConfirmationDelegate {
-    private var _view as MomoCalendarView;
-    function initialize(view as MomoCalendarView) {
+class MomoLegacyCalendarConfirmationDelegate extends WatchUi.ConfirmationDelegate {
+    private var _view as MomoLegacyCalendarView;
+    function initialize(view as MomoLegacyCalendarView) {
         ConfirmationDelegate.initialize();
         _view = view;
     }
