@@ -17,6 +17,7 @@ class MomoCalendarView extends MomoLegacyCalendarView {
     private var _message as String = "";
     private var _pendingAccept as String or Null = null;
     private var _loaded as Boolean = false;
+    private var _mock as MomoMockCalendar or Null = null;
 
     function initialize() {
         MomoLegacyCalendarView.initialize();
@@ -43,10 +44,25 @@ class MomoCalendarView extends MomoLegacyCalendarView {
 
     function dispose() as Void { _service.cancel(); MomoLegacyCalendarView.dispose(); }
 
+    private function getMock() as MomoMockCalendar {
+        if (_mock == null) {
+            _mock = new MomoMockCalendar();
+        }
+        return _mock as MomoMockCalendar;
+    }
+
     function refresh() as Void {
+        if (!_service.hasServer()) {
+            // No Momo service configured: run the exact same suggestions flow,
+            // but the idea and slot come from the schedule baked into the app.
+            _active = true; _loaded = true; _page = 0; _pendingAccept = null;
+            _stage = :loading; _message = "Finding your next little escape...";
+            WatchUi.requestUpdate();
+            handleSuggestions(200, getMock().suggestions());
+            return;
+        }
         _active = true; _loaded = true; _page = 0; _pendingAccept = null;
-        if (!_service.hasServer()) { _stage = :unconfigured; }
-        else if (!_service.hasToken()) { _stage = :unpaired; }
+        if (!_service.hasToken()) { _stage = :unpaired; }
         else {
             _stage = :loading; _message = "Finding your next little escape...";
             _service.suggestions(method(:handleSuggestions));
@@ -107,7 +123,7 @@ class MomoCalendarView extends MomoLegacyCalendarView {
 
     function requestAccept() as Void {
         if (_idea == null) { return; }
-        var question = (_mode.equals("demo") ? "Save a DEMO break?\n" : "Schedule this break?\n") + (_idea["title"] as String) + "\n" + (_idea["label"] as String);
+        var question = (_mode.equals("demo") ? "Save a DEMO break?\n" : (_mode.equals("mock") ? "Save a MOCK break?\n" : "Schedule this break?\n")) + (_idea["title"] as String) + "\n" + (_idea["label"] as String);
         WatchUi.pushView(new WatchUi.Confirmation(question), new MomoSuggestionConfirmationDelegate(self), WatchUi.SLIDE_LEFT);
     }
 
@@ -116,6 +132,11 @@ class MomoCalendarView extends MomoLegacyCalendarView {
         if (_pendingAccept == null && _idea != null) { _pendingAccept = _idea["id"] as String; }
         if (_pendingAccept == null) { return; }
         _stage = :loading; _message = "Reserving a little time for you...";
+        if (_mode.equals("mock")) {
+            getMock().decide(_pendingAccept, "accept", method(:handleAccepted));
+            WatchUi.requestUpdate();
+            return;
+        }
         _service.decide(_pendingAccept, "accept", method(:handleAccepted));
         WatchUi.requestUpdate();
     }
@@ -124,6 +145,11 @@ class MomoCalendarView extends MomoLegacyCalendarView {
         if (_idea == null || !(_idea["id"] instanceof String)) { return; }
         _stage = :loading;
         _message = decision.equals("snooze") ? "Giving you some breathing room..." : "Finding a different little adventure...";
+        if (_mode.equals("mock")) {
+            getMock().decide(_idea["id"] as String, decision, decision.equals("snooze") ? method(:handleSnoozed) : method(:handleSuggestions));
+            WatchUi.requestUpdate();
+            return;
+        }
         _service.decide(_idea["id"] as String, decision, decision.equals("snooze") ? method(:handleSnoozed) : method(:handleSuggestions));
         WatchUi.requestUpdate();
     }
@@ -192,7 +218,7 @@ class MomoCalendarView extends MomoLegacyCalendarView {
         dc.drawText(130, 23, Graphics.FONT_SMALL, "Momo suggests", Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(_mode.equals("demo") ? 0xFFFF55 : 0x55FFAA, Graphics.COLOR_BLACK);
         var badge = _source.equals("grok") ? "GROK" : "SCRIPTED";
-        badge += _mode.equals("demo") ? " / DEMO" : " / CALENDAR";
+        badge += _mode.equals("demo") ? " / DEMO" : (_mode.equals("mock") ? " / MOCK" : " / CALENDAR");
         dc.drawText(130, 54, Graphics.FONT_XTINY, badge, Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         var hint = "START: refresh";

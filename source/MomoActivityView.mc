@@ -105,9 +105,18 @@ class MomoActivityView extends WatchUi.View {
 
     function select() as Void {
         if (_state == :scheduled) {
-            _pendingAction = "start";
-            _state = :saving;
-            _client.startActivity(_activity["id"] as String, method(:handleStarted));
+            if (_mode.equals("mock")) {
+                // Mock mode: start locally without the service round-trip.
+                _started = true;
+                _state = :running;
+                _pendingAction = "";
+                save();
+                if (_visible) { startTimer(); }
+            } else {
+                _pendingAction = "start";
+                _state = :saving;
+                _client.startActivity(_activity["id"] as String, method(:handleStarted));
+            }
         } else if (_state == :running) {
             openOptions();
         } else if (_state == :feedback) {
@@ -130,7 +139,7 @@ class MomoActivityView extends WatchUi.View {
         if (_state != :running) { return; }
         var menu = new WatchUi.Menu2({:title => "Your break"});
         menu.addItem(new WatchUi.MenuItem("I'm done", _tracker.goalMet() ? "Goal reached" : "Mark it yourself", :finish, null));
-        if (_mode.equals("demo")) {
+        if (_mode.equals("demo") || _mode.equals("mock")) {
             menu.addItem(new WatchUi.MenuItem("Simulate finish", "Demo data only", :simulate, null));
         }
         menu.addItem(new WatchUi.MenuItem("Keep going", null, :continue, null));
@@ -145,7 +154,7 @@ class MomoActivityView extends WatchUi.View {
     }
 
     function finishActivity(simulate as Boolean) as Void {
-        if (simulate && !_mode.equals("demo")) { return; }
+        if (simulate && !_mode.equals("demo") && !_mode.equals("mock")) { return; }
         if (simulate) { _tracker.simulateFinish(); }
         var source = "self_report";
         if (_tracker.goalMet()) {
@@ -162,7 +171,15 @@ class MomoActivityView extends WatchUi.View {
         stopTimer();
         _tracker.pause();
         _state = :saving;
-        _client.completeActivity(_activity["id"] as String, _proof["source"] as String, _proof["steps"] as Number, _proof["elapsedSeconds"] as Number, method(:handleCompleted));
+        if (_mode.equals("mock")) {
+            // Mock mode: record completion locally, same state transitions.
+            _completed = true;
+            _state = :feedback;
+            _pendingAction = "";
+            save();
+        } else {
+            _client.completeActivity(_activity["id"] as String, _proof["source"] as String, _proof["steps"] as Number, _proof["elapsedSeconds"] as Number, method(:handleCompleted));
+        }
         WatchUi.requestUpdate();
     }
 
@@ -170,7 +187,14 @@ class MomoActivityView extends WatchUi.View {
         _pendingHelpful = helpful;
         _pendingAction = "feedback";
         _state = :saving;
-        _client.feedback(_activity["id"] as String, helpful, method(:handleFeedback));
+        if (_mode.equals("mock")) {
+            // Mock mode: record feedback locally and clear the session.
+            _state = :done;
+            _message = "Noted. Your future breaks just got smarter.";
+            Application.Storage.deleteValue("momoActivitySession");
+        } else {
+            _client.feedback(_activity["id"] as String, helpful, method(:handleFeedback));
+        }
         WatchUi.requestUpdate();
     }
 

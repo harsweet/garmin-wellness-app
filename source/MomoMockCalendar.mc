@@ -47,6 +47,16 @@ class MomoMockCalendar {
     // Mirrors the bridge's retry semantics: the same slot id can only be
     // created once; a repeat returns already_created instead of duplicating.
     function createActivity(slotId as String, label as String, callback as Method) as Void {
+        var status = markCreated(slotId, label);
+        callback.invoke(200, {
+            "status" => status,
+            "label" => label,
+            "eventUrl" => "",
+            "mode" => "mock"
+        });
+    }
+
+    private function markCreated(slotId as String, label as String) as String {
         var status = "created";
         var stored = Application.Storage.getValue("mockCreatedSlots");
         var created = stored instanceof Array ? (stored as Array) : ([] as Array);
@@ -58,17 +68,16 @@ class MomoMockCalendar {
         if (status.equals("created")) {
             created.add(slotId);
             Application.Storage.setValue("mockCreatedSlots", created);
-            var storedWalks = Application.Storage.getValue("mockSavedWalks");
-            var walks = storedWalks instanceof Array ? (storedWalks as Array) : ([] as Array);
-            walks.add(label);
-            Application.Storage.setValue("mockSavedWalks", walks);
+            addSavedWalk(label);
         }
-        callback.invoke(200, {
-            "status" => status,
-            "label" => label,
-            "eventUrl" => "",
-            "mode" => "mock"
-        });
+        return status;
+    }
+
+    private function addSavedWalk(label as String) as Void {
+        var storedWalks = Application.Storage.getValue("mockSavedWalks");
+        var walks = storedWalks instanceof Array ? (storedWalks as Array) : ([] as Array);
+        walks.add(label);
+        Application.Storage.setValue("mockSavedWalks", walks);
     }
 
     // Labels of mock walks saved on this device, in save order. Persisted in
@@ -76,6 +85,124 @@ class MomoMockCalendar {
     function getSavedWalks() as Array {
         var stored = Application.Storage.getValue("mockSavedWalks");
         return stored instanceof Array ? (stored as Array) : ([] as Array);
+    }
+
+    // Upstream's suggestions contract, fed entirely from the baked schedule.
+    function suggestions() as Dictionary {
+        var result = { "mode" => "mock", "aiSource" => "fallback", "profileConfigured" => false };
+        var checkIn = resumeCheckIn();
+        if (checkIn != null) {
+            result["checkIn"] = checkIn;
+            return result;
+        }
+        result["checkIn"] = null;
+        var nowMoment = Time.now();
+        var now = Time.Gregorian.info(nowMoment, Time.FORMAT_SHORT);
+        var nowSecs = now.hour * 3600 + now.min * 60 + now.sec;
+        var busy = buildBusy(getEvents(), now, nowSecs);
+        var idea = nextIdea(nowMoment, nowSecs, busy);
+        if (idea != null) {
+            result["suggestion"] = idea;
+        } else {
+            result["message"] = "No suitable gaps right now. We can check later.";
+        }
+        return result;
+    }
+
+    // Handles accept/snooze/alternative decisions locally, returning the same
+    // response shapes the Momo service sends for each decision.
+    function decide(suggestionId as String, decision as String, callback as Method) as Void {
+        if (decision.equals("accept")) {
+            var slot = findSlotById(suggestionId);
+            if (slot == null) {
+                callback.invoke(409, { "error" => "conflict", "message" => "That slot changed. Let's find another." });
+                return;
+            }
+            var chosen = slot as Dictionary;
+            var status = markCreated(chosen["id"] as String, chosen["label"] as String);
+            callback.invoke(200, {
+                "status" => status,
+                "activity" => {
+                    "id" => chosen["id"],
+                    "title" => "Little walk",
+                    "label" => chosen["label"],
+                    "durationMinutes" => WALK_MINUTES,
+                    "stepTarget" => 100,
+                    "tracking" => "timer"
+                },
+                "mode" => "mock"
+            });
+            return;
+        }
+        if (decision.equals("snooze")) {
+            skipSlot(suggestionId);
+            callback.invoke(200, { "status" => "snoozed" });
+            return;
+        }
+        if (decision.equals("alternative")) {
+            skipSlot(suggestionId);
+            callback.invoke(200, suggestions());
+            return;
+        }
+        callback.invoke(400, { "error" => "unknown_decision", "message" => "That decision is not supported." });
+    }
+
+    // A reserved-but-unfinished session resumes as a check-in, exactly like
+    // the service does; completed sessions are cleared instead.
+    private function resumeCheckIn() as Dictionary or Null {
+        var stored = Application.Storage.getValue("momoActivitySession");
+        if (stored instanceof Dictionary) {
+            var record = stored as Dictionary;
+            if (record["activity"] instanceof Dictionary && record["completed"] != true) {
+                return record["activity"] as Dictionary;
+            }
+        }
+        return null;
+    }
+
+    private function nextIdea(nowMoment as Time.Moment, nowSecs as Number, busy as Array) as Dictionary or Null {
+        var stored = Application.Storage.getValue("mockSkippedSlots");
+        var exclude = stored instanceof Array ? (stored as Array) : ([] as Array);
+        var slots = collectSlots(nowMoment, nowSecs, busy, 1, exclude);
+        if (slots.size() == 0) {
+            return null;
+        }
+        var slot = slots[0];
+        var quips = ["Your chair called. It wants some space.", "A tiny walk. A tiny win.", "Even a few minutes count.", "Fresh air fits right here."];
+        return {
+            "id" => slot["id"],
+            "title" => "Little walk",
+            "label" => slot["label"],
+            "quip" => quips[(nowSecs / 600) % quips.size()],
+            "reason" => "It fits a short walk between your plans."
+        };
+    }
+
+    private function findSlotById(suggestionId as String) as Dictionary or Null {
+        var nowMoment = Time.now();
+        var now = Time.Gregorian.info(nowMoment, Time.FORMAT_SHORT);
+        var nowSecs = now.hour * 3600 + now.min * 60 + now.sec;
+        var busy = buildBusy(getEvents(), now, nowSecs);
+        var slots = collectSlots(nowMoment, nowSecs, busy, 24, [] as Array);
+        for (var i = 0; i < slots.size(); i += 1) {
+            var slot = slots[i];
+            if (slot["id"] instanceof String && (slot["id"] as String).equals(suggestionId)) {
+                return slot;
+            }
+        }
+        return null;
+    }
+
+    private function skipSlot(suggestionId as String) as Void {
+        var stored = Application.Storage.getValue("mockSkippedSlots");
+        var skipped = stored instanceof Array ? (stored as Array) : ([] as Array);
+        if (!containsId(skipped, suggestionId)) {
+            if (skipped.size() >= 20) {
+                skipped = [] as Array;
+            }
+            skipped.add(suggestionId);
+            Application.Storage.setValue("mockSkippedSlots", skipped);
+        }
     }
 
     private function getEvents() as Array {
@@ -149,15 +276,19 @@ class MomoMockCalendar {
     // 08:00 and 20:00 local, half-hour grid, 2-minute buffers around busy
     // periods, next 24 hours, three suggestions in chronological order.
     private function findSlots(nowMoment as Time.Moment, nowSecs as Number, busy as Array) as Array {
+        return collectSlots(nowMoment, nowSecs, busy, 3, [] as Array);
+    }
+
+    private function collectSlots(nowMoment as Time.Moment, nowSecs as Number, busy as Array, maxCount as Number, exclude as Array) as Array {
         var slots = [] as Array;
         var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        for (var d = 0; d < 2 && slots.size() < 3; d += 1) {
+        for (var d = 0; d < 2 && slots.size() < maxCount; d += 1) {
             var dayInfo = Time.Gregorian.info(nowMoment.add(new Time.Duration(d * 86400)), Time.FORMAT_SHORT);
             var dateTag = dayInfo.year + "-" + pad2(dayInfo.month) + "-" + pad2(dayInfo.day);
             var dayName = dayNames[dayInfo.day_of_week - 1];
-            for (var hour = DAY_START_HOUR; hour <= DAY_END_HOUR && slots.size() < 3; hour += 1) {
+            for (var hour = DAY_START_HOUR; hour <= DAY_END_HOUR && slots.size() < maxCount; hour += 1) {
                 var starts = [0, 30];
-                for (var s = 0; s < starts.size() && slots.size() < 3; s += 1) {
+                for (var s = 0; s < starts.size() && slots.size() < maxCount; s += 1) {
                     var timeOfDay = hour * 3600 + starts[s] * 60;
                     if (timeOfDay + WALK_MINUTES * 60 > DAY_END_HOUR * 3600) {
                         continue;
@@ -169,11 +300,27 @@ class MomoMockCalendar {
                     if (!isFree(offset, busy)) {
                         continue;
                     }
-                    slots.add(makeSlot(dayInfo, dayName, dateTag, hour, starts[s]));
+                    var slot = makeSlot(dayInfo, dayName, dateTag, hour, starts[s]);
+                    if (containsId(exclude, slot["id"])) {
+                        continue;
+                    }
+                    slots.add(slot);
                 }
             }
         }
         return slots;
+    }
+
+    private function containsId(list as Array, id as Object or Null) as Boolean {
+        if (!(id instanceof String)) {
+            return false;
+        }
+        for (var i = 0; i < list.size(); i += 1) {
+            if (list[i] instanceof String && (list[i] as String).equals(id as String)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function isFree(offset as Number, busy as Array) as Boolean {
