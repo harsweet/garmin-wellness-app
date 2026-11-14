@@ -4,172 +4,62 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>Momo — make a little room for you</title>
+    <title>Meet Momo</title>
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <div class="page-shell">
-      <header class="site-header">
-        <a class="wordmark" href="/" aria-label="Momo home">momo<span class="wordmark-dot" aria-hidden="true"></span></a>
-        <div class="status-pills" aria-label="Connection status">
-          <span class="status-pill"><span class="status-dot amber" aria-hidden="true"></span>Demo calendar</span>
-          <span class="status-pill" id="ai-badge"><span class="status-dot" aria-hidden="true"></span><span id="ai-label">Checking suggestions</span></span>
-        </div>
+    <main class="page-shell">
+      <a class="wordmark" href="/" aria-label="Momo home">momo<span aria-hidden="true">.</span></a>
+
+      <header class="intro">
+        <div class="mascot"><img src="/momo.jpg" alt="Momo, your monkey sidekick" width="1152" height="1728"></div>
+        <p class="eyebrow">A LITTLE ROOM FOR YOU</p>
+        <h1>Your goals.<br>Momo's <em>next move.</em></h1>
+        <p>Choose what you want to work on.<br>Add a little context. Momo takes it from there.</p>
       </header>
+
+      <section class="notice" id="access-notice" role="status" aria-live="polite">
+        <h2 id="access-title">Connecting to Momo…</h2>
+        <p id="access-message">Getting your setup ready.</p>
+      </section>
 
       <div class="connection-banner" id="connection-banner" role="status" hidden>
         <span id="connection-message"></span>
-        <button type="button" class="text-button" id="retry-connection">Try again</button>
+        <button class="text-button" id="retry-connection" type="button">Try again</button>
       </div>
 
-      <main>
-        <section class="intro" aria-labelledby="intro-title">
-          <p class="eyebrow">A SMALL BREAK. A LITTLE MONKEY BUSINESS.</p>
-          <h1 id="intro-title">Make a little<br>room for <em>you.</em></h1>
-          <p class="intro-copy">Tell Momo what fits your day. Your little sidekick will find a calendar gap, suggest a doable break, and check in afterward.</p>
-        </section>
+      <section class="setup-complete" id="setup-complete" role="status" tabindex="-1" hidden>
+        <span class="complete-symbol" aria-hidden="true">✓</span>
+        <h2>You're all set.</h2>
+        <p>Head back to Momo on your watch.<br>Your goals and notes are saved.</p>
+        <button class="text-button" id="edit-profile" type="button">Edit my goals</button>
+      </section>
 
-        <section class="panel access-notice" id="access-notice" role="status" aria-live="polite">
-          <span class="access-symbol" aria-hidden="true">m</span>
-          <div><p class="eyebrow">YOUR WATCH, YOUR LITTLE SIDEKICK</p><h2 id="access-title">Connecting to Momo…</h2><p id="access-message">Getting your setup ready.</p></div>
-        </section>
-
-        <section class="setup-complete" id="setup-complete" role="status" tabindex="-1" hidden>
-          <span class="complete-symbol" aria-hidden="true">✓</span>
-          <div><p class="eyebrow">YOU’RE READY</p><h2>All set. Return to Momo on your watch.</h2><p>Your preferences are saved. Momo will pick them up automatically.</p></div>
-        </section>
-
-        <div class="setup-grid" id="setup-content" hidden>
-          <section class="panel profile-panel" aria-labelledby="profile-title">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">LET’S MAKE THIS YOURS</p>
-                <h2 id="profile-title">A few things about you.</h2>
-              </div>
-              <span class="small-badge" id="profile-badge">Quick setup</span>
+      <section class="setup-content" id="setup-content" aria-label="Your goals and context" hidden>
+        <form id="profile-form" aria-describedby="save-status">
+          <fieldset>
+            <legend>I want a little more…</legend>
+            <div class="goal-choices">
+              <label class="goal-choice"><input type="checkbox" name="goals" value="move"><span><strong>Movement</strong><small>Less chair. More you.</small></span></label>
+              <label class="goal-choice"><input type="checkbox" name="goals" value="outside"><span><strong>Time outside</strong><small>A change of scenery.</small></span></label>
+              <label class="goal-choice"><input type="checkbox" name="goals" value="breaks"><span><strong>Better breaks</strong><small>A little room to reset.</small></span></label>
             </div>
-            <p class="section-copy">Just the details that help Momo choose a better time and a better kind of break.</p>
-            <p class="profile-note">Your preferences, available times, and activity feedback shape suggestions. Meeting titles are not sent to Grok.</p>
+          </fieldset>
 
-            <form id="profile-form" aria-describedby="save-status">
-              <fieldset class="form-section">
-                <legend><span class="section-number">01</span>Your kind of day</legend>
-                <div class="field-grid">
-                  <label class="field">What should Momo call you?
-                    <input id="nickname" name="nickname" type="text" maxlength="32" autocomplete="given-name" placeholder="Your nickname (optional)">
-                  </label>
-                  <label class="field">Your time zone
-                    <input id="time-zone" name="timeZone" type="text" list="time-zones" required spellcheck="false" placeholder="America/Edmonton" autocomplete="off">
-                    <datalist id="time-zones"></datalist>
-                  </label>
-                </div>
-                <div class="choice-group" role="group" aria-labelledby="goals-label">
-                  <p class="field-label" id="goals-label">What would you like a little more of?</p>
-                  <div class="choice-chips">
-                    <label class="choice-chip"><input type="checkbox" name="goals" value="move" checked><span>Movement</span></label>
-                    <label class="choice-chip"><input type="checkbox" name="goals" value="outside" checked><span>Time outside</span></label>
-                    <label class="choice-chip"><input type="checkbox" name="goals" value="breaks" checked><span>Proper breaks</span></label>
-                  </div>
-                </div>
-              </fieldset>
-
-              <fieldset class="form-section">
-                <legend><span class="section-number">02</span>Breaks you’ll actually take</legend>
-                <div class="choice-group" role="group" aria-labelledby="activities-label">
-                  <p class="field-label" id="activities-label">Pick the things you’re up for</p>
-                  <div class="choice-chips">
-                    <label class="choice-chip"><input type="checkbox" name="preferredActivities" value="walk" checked><span>A little walk</span></label>
-                    <label class="choice-chip"><input type="checkbox" name="preferredActivities" value="stretch" checked><span>A gentle stretch</span></label>
-                    <label class="choice-chip"><input type="checkbox" name="preferredActivities" value="breathe" checked><span>A breathing pause</span></label>
-                    <label class="choice-chip"><input type="checkbox" name="preferredActivities" value="rest" checked><span>Just resting</span></label>
-                  </div>
-                </div>
-                <label class="field break-length">Keep my breaks under
-                  <select id="max-break-minutes" name="maxBreakMinutes">
-                    <option value="2">2 minutes — keep it tiny</option>
-                    <option value="3">3 minutes</option>
-                    <option value="5">5 minutes</option>
-                    <option value="8" selected>8 minutes</option>
-                    <option value="10">10 minutes</option>
-                    <option value="15">15 minutes</option>
-                  </select>
-                </label>
-                <label class="toggle-row">
-                  <span><strong>Keep activities seated</strong><small>Momo will choose breaks you can do from your chair.</small></span>
-                  <input id="seated-only" name="seatedOnly" type="checkbox" role="switch">
-                </label>
-              </fieldset>
-
-              <fieldset class="form-section">
-                <legend><span class="section-number">03</span>Timing & a little personality</legend>
-                <p class="field-label">Suggest breaks between</p>
-                <div class="time-fields">
-                  <label class="field"><span class="sr-only">Earliest reminder time</span><input id="reminder-start" name="reminderStart" type="time" value="08:00" required></label>
-                  <span class="time-separator">and</span>
-                  <label class="field"><span class="sr-only">Latest reminder time</span><input id="reminder-end" name="reminderEnd" type="time" value="20:00" required></label>
-                </div>
-                <label class="field humor-field">How much monkey business?
-                  <select id="humor" name="humor">
-                    <option value="gentle">Gentle — a little encouragement</option>
-                    <option value="playful" selected>Playful — a friendly little menace</option>
-                    <option value="cheeky">Cheeky — light roasts welcome</option>
-                  </select>
-                </label>
-              </fieldset>
-
-              <div class="form-footer">
-                <button class="primary-button" id="save-profile" type="submit"><span id="save-label">Save my preferences</span><span aria-hidden="true">↗</span></button>
-                <p class="save-status" id="save-status" role="status" aria-live="polite">These preferences stay on your local Momo service.</p>
-              </div>
-            </form>
-          </section>
-
-          <aside class="sidebar" aria-label="Meet your sidekick">
-            <section class="mascot-card" aria-labelledby="mascot-title">
-              <div class="mascot-image"><img src="/momo.jpg" alt="Momo, your smiling monkey sidekick" width="1152" height="1728"></div>
-              <div class="mascot-caption">
-                <p class="eyebrow">YOUR NEW BREAK BUDDY</p>
-                <h2 id="mascot-title">Big plans.<br>Tiny adventures.</h2>
-                <p>“Your chair and I agree you should see other people.”</p>
-                <span class="signature">— Momo</span>
-              </div>
-            </section>
-            <section class="panel watch-card" aria-labelledby="watch-title">
-              <div class="watch-icon" aria-hidden="true"><div><span>m</span></div></div>
-              <h3 id="watch-title">Your next little escape<br>starts on your watch.</h3>
-              <p>Hold <kbd>UP</kbd> on Momo in the fēnix simulator. Choose a suggestion, then confirm before it’s added to the demo calendar.</p>
-              <p class="quiet-note">A free slot is an invitation. “Later” is always an option.</p>
-            </section>
-            <section class="ai-note" aria-labelledby="ai-note-title">
-              <h3 id="ai-note-title">A little more personal.</h3>
-              <p id="ai-description">Checking the suggestion service…</p>
-            </section>
-          </aside>
-        </div>
-
-        <section class="dashboard-section" id="dashboard-content" aria-labelledby="dashboard-title" hidden>
-          <div class="dashboard-heading">
-            <div><p class="eyebrow">THE DAY, WITH A LITTLE BREATHING ROOM</p><h2 id="dashboard-title">Small plans. Small wins.</h2></div>
-            <span class="refresh-note"><span class="status-dot mint" aria-hidden="true"></span>Updates every 5 seconds</span>
+          <div class="context-field">
+            <label for="additional-context">Anything Momo should know? <span>Optional</span></label>
+            <textarea id="additional-context" name="additionalContext" rows="4" maxlength="1000" aria-describedby="context-note context-count" placeholder="I sit at a desk all day, prefer short breaks, and want to get outside more."></textarea>
+            <div class="context-help"><p id="context-note">Your routine, preferences, or what gets in the way.</p><span id="context-count">0 / 1000</span></div>
           </div>
-          <div class="dashboard-grid">
-            <section class="panel agenda-panel" aria-labelledby="agenda-title">
-              <div class="card-heading"><h3 id="agenda-title">Your demo calendar</h3><span class="small-badge">Sample day</span></div>
-              <p class="calendar-zone" id="calendar-zone">Loading your day…</p>
-              <ul class="agenda-list" id="events"><li class="empty-state">The demo day will appear here.</li></ul>
-              <p class="quiet-note">Demo events only. No Google account is connected.</p>
-            </section>
-            <section class="panel wins-panel" aria-labelledby="wins-title">
-              <div class="card-heading"><h3 id="wins-title">Your little wins</h3><span class="win-count" id="completed-count">0</span></div>
-              <p class="section-copy">The breaks you choose, and how they worked for you.</p>
-              <ul class="wins-list" id="sessions"><li class="empty-state">No breaks yet. Your first small win starts on the watch.</li></ul>
-            </section>
-          </div>
-        </section>
-      </main>
 
-      <footer class="site-footer"><span class="footer-wordmark">momo.</span><p>A little room to move, rest, and be human.</p><span>fēnix 7 Pro · Demo calendar</span></footer>
-    </div>
+          <button class="primary-button" id="save-profile" type="submit"><span id="save-label">Save & return to watch</span><span aria-hidden="true">↗</span></button>
+          <p class="save-status" id="save-status" role="status" aria-live="polite">You can update these anytime.</p>
+        </form>
+        <p class="privacy-note">Momo remembers your goals and notes. They may be shared with Grok to personalize your suggestions.</p>
+      </section>
+
+      <footer>Small breaks. Excellent monkey business.</footer>
+    </main>
   </body>
 </html>

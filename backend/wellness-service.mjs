@@ -8,14 +8,17 @@ export const ACTIVITY_CATALOG = Object.freeze([
   { activityId: 'breathe', title: '2-minute breathing break', durationMinutes: 2, stepTarget: 0, tracking: 'timer' },
   { activityId: 'rest', title: '2-minute quiet rest', durationMinutes: 2, stepTarget: 0, tracking: 'timer' }
 ]);
-export const DEFAULT_PROFILE = Object.freeze({ nickname: '', timeZone: 'America/Edmonton', goals: ['move', 'outside', 'breaks'], preferredActivities: ['walk', 'stretch', 'breathe', 'rest'], maxBreakMinutes: 8, reminderStart: '08:00', reminderEnd: '20:00', humor: 'playful', seatedOnly: false });
+export const DEFAULT_PROFILE = Object.freeze({ nickname: '', additionalContext: '', timeZone: 'America/Edmonton', goals: ['move', 'outside', 'breaks'], preferredActivities: ['walk', 'stretch', 'breathe', 'rest'], maxBreakMinutes: 8, reminderStart: '08:00', reminderEnd: '20:00', humor: 'playful', seatedOnly: false });
 const text = (value, max) => typeof value === 'string' ? value.normalize('NFKC').replace(/[^\x20-\x7e]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
 const invalid = message => { throw new CalendarError(400, 'invalid_profile', message); };
 
 export function validateProfile(input, defaults = DEFAULT_PROFILE) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid('Provide a profile object.');
-  const merged = { ...defaults, ...input };
+  const merged = { ...DEFAULT_PROFILE, ...defaults, ...input };
   if (typeof merged.nickname !== 'string' || merged.nickname.length > 32) invalid('Nickname must be 32 characters or fewer.');
+  if (typeof merged.additionalContext !== 'string' || merged.additionalContext.length > 1000) invalid('Additional context must be text up to 1000 characters.');
+  const additionalContext = merged.additionalContext.normalize('NFC').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '').trim();
+  if (additionalContext.length > 1000) invalid('Additional context must be text up to 1000 characters.');
   try { new Intl.DateTimeFormat('en', { timeZone: merged.timeZone }).format(); } catch { invalid('Choose a valid IANA time zone.'); }
   if (!Array.isArray(merged.goals) || !merged.goals.length || merged.goals.some(goal => !['move', 'outside', 'breaks'].includes(goal))) invalid('Choose at least one supported wellness goal.');
   if (!Array.isArray(merged.preferredActivities) || !merged.preferredActivities.length || merged.preferredActivities.some(activity => !ACTIVITY_CATALOG.some(item => item.activityId === activity))) invalid('Choose at least one supported activity.');
@@ -24,7 +27,7 @@ export function validateProfile(input, defaults = DEFAULT_PROFILE) {
   if (merged.humor === 'spicy') merged.humor = 'cheeky';
   if (!['gentle', 'playful', 'cheeky'].includes(merged.humor)) invalid('Choose gentle, playful, or cheeky humor.');
   if (typeof merged.seatedOnly !== 'boolean') invalid('Seated-only preference must be true or false.');
-  const profile = { nickname: text(merged.nickname, 32), timeZone: merged.timeZone, goals: [...new Set(merged.goals)], preferredActivities: [...new Set(merged.preferredActivities)], maxBreakMinutes: merged.maxBreakMinutes, reminderStart: merged.reminderStart, reminderEnd: merged.reminderEnd, humor: merged.humor, seatedOnly: merged.seatedOnly };
+  const profile = { nickname: text(merged.nickname, 32), additionalContext, timeZone: merged.timeZone, goals: [...new Set(merged.goals)], preferredActivities: [...new Set(merged.preferredActivities)], maxBreakMinutes: merged.maxBreakMinutes, reminderStart: merged.reminderStart, reminderEnd: merged.reminderEnd, humor: merged.humor, seatedOnly: merged.seatedOnly };
   if (!ACTIVITY_CATALOG.some(activity => profile.preferredActivities.includes(activity.activityId) && activity.durationMinutes <= profile.maxBreakMinutes && (!profile.seatedOnly || activity.activityId !== 'walk'))) invalid('These preferences exclude every activity. Choose a shorter activity or increase break length.');
   return profile;
 }

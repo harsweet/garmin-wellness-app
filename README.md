@@ -30,16 +30,16 @@ Garmin requires HTTPS, so the local command starts a temporary Cloudflare Tunnel
 ## Try the full experience
 
 1. Momo starts with a QR code. Scan it with your phone, or use the local setup page at http://127.0.0.1:8787.
-2. Choose a nickname, goals, preferred activities, maximum break length, reminder hours, time zone, humor level, and seated-only preference.
+2. Choose your goals and optionally add context about your routine, preferences, or what gets in the way. No name or account details are required. New profiles use the phone's time zone automatically.
 3. Save the profile. While the QR screen is visible, the watch checks every ten seconds and returns to Momo when setup is complete. START checks immediately; BACK skips for now.
 4. **Hold UP** on Momo for a personalized activity. UP/DOWN switches detail pages; START offers **Let's go**, **Later**, or **Something else**.
 5. Accepting requires confirmation before adding a demo calendar event. Later snoozes suggestions for thirty minutes. Alternatives avoid repeating the activity where possible.
 6. Start the accepted activity. The watch tracks foreground time and observed daily-step deltas. Hold UP during a demo activity for **Simulate finish**, or explicitly self-report completion.
 7. Answer whether it helped. Acceptance, completion, snooze, and helpfulness counts influence future activity ranking.
 
-Walking, gentle stretching, breathing, and quiet rest are supported. Profile constraints and calendar conflicts determine eligible choices; Grok chooses among them and writes a short, humorous line. It cannot invent arbitrary activities or book anything without acceptance. Meeting titles are excluded from the model prompt. Recommendations are cached and provider requests throttled.
+Walking, gentle stretching, breathing, and quiet rest are supported. Goals, saved context (up to 1,000 characters), activity history, and calendar availability inform Grok's choice and short, humorous line. Profile constraints determine eligible activities; Grok cannot invent arbitrary activities or book anything without acceptance. Updating goals or context invalidates old suggestions. Meeting titles are excluded from the model prompt. Recommendations are cached and provider requests throttled. Existing profiles keep their prior activity and accessibility preferences when using the simplified form.
 
-Phone QR links are one-time, expire after ten minutes, and grant a scoped browser session. That session can edit the profile and read its dashboard, but cannot invoke paid AI calls or impersonate the watch. Profiles, feedback, and demo bookings remain on the backend.
+Phone QR links are one-time, expire after ten minutes, and grant a scoped browser session. That session can edit the profile and read private demo data, but cannot invoke paid AI calls or impersonate the watch. Goals, context, feedback, and demo bookings persist on the backend across restarts; relevant profile details and aggregate feedback are included in Grok requests.
 
 The three home-screen moods and their day remarks remain selectable demo states. Activity tracking pauses when its screen is hidden; this version does not provide background tracking, sleep analysis, or verified health outcomes. Simulator completion evidence is labeled simulated. Suggestions are requested in the app; all-day background notifications are not implemented.
 

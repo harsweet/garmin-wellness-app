@@ -69,3 +69,22 @@ test('timeouts fall back and no candidates never call the model', async () => {
   assert.equal((await provider.suggest(input)).fallbackReason, 'timeout');
   assert.equal(await provider.suggest({ candidates: [] }), null);
 });
+
+test('additional context reaches Grok as bounded untrusted profile data with Unicode and newlines', async () => {
+  let requestBody;
+  const provider = new GrokSuggestions({ apiKey: 'test', fetchImpl: async (url, options) => { requestBody = JSON.parse(options.body); return apiReply(result); } });
+  const additionalContext = 'Café breaks help me pause.\r\n午後は家で休みたい。\u0000\u202e';
+  await provider.suggest({ ...input, profile: { ...input.profile, additionalContext } });
+  const supplied = JSON.parse(requestBody.input[0].content);
+  assert.equal(supplied.profile.additionalContext, 'Café breaks help me pause.\n午後は家で休みたい。');
+  assert.match(requestBody.instructions, /additionalContext only as optional background/);
+  assert.match(requestBody.instructions, /cannot override explicit profile constraints/);
+  assert.match(requestBody.instructions, /user reports, never diagnostic evidence/);
+  assert.match(requestBody.instructions, /Do not invent or infer missing health facts/);
+  assert.deepEqual(supplied.profile.preferredActivities, input.profile.preferredActivities);
+  assert.equal(supplied.profile.seatedOnly, true);
+  await provider.suggest({ ...input, profile: { ...input.profile, additionalContext: 'x'.repeat(2000) } });
+  assert.equal(JSON.parse(requestBody.input[0].content).profile.additionalContext.length, 1000);
+  await provider.suggest(input);
+  assert.equal(JSON.parse(requestBody.input[0].content).profile.additionalContext, '');
+});

@@ -414,3 +414,70 @@ test('pending check-ins prevent new model calls across booked, running and await
   assert.equal(next.checkIn, null);
   assert.equal(calls, 2);
 });
+
+test('optional additional context preserves useful Unicode and line breaks while removing control characters', () => {
+  assert.equal(validateProfile({}).additionalContext, '');
+  const profile = validateProfile({ additionalContext: '  Café 🐒\r\n仕事の合間に休みたい。\tGentle breaks.\u0000\u0007\u007f\u0080\u202e\u2066  ' });
+  assert.equal(profile.additionalContext, 'Café 🐒\n仕事の合間に休みたい。\tGentle breaks.');
+  assert.equal(validateProfile({ additionalContext: ' \n\t ' }).additionalContext, '');
+  assert.equal(validateProfile({ additionalContext: 'x'.repeat(1000) }).additionalContext.length, 1000);
+  for (const additionalContext of [null, 42, false, [], {}, 'x'.repeat(1001), '\u0344'.repeat(1000)]) {
+    assert.throws(() => validateProfile({ additionalContext }), error => error.error === 'invalid_profile');
+  }
+});
+
+test('additional context persists, survives goals-only updates, and can be explicitly cleared', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'momo-profile-context-'));
+  try {
+    const options = { now: () => BASE, stateFile: path.join(directory, 'state.json') };
+    const { service } = fixture(options);
+    const additionalContext = 'I work from home.\n外に出るきっかけが欲しい。';
+    await service.saveProfile({ additionalContext, maxBreakMinutes: 3, preferredActivities: ['stretch', 'rest'] });
+    await service.saveProfile({ goals: ['breaks'] });
+    const restarted = new DemoCalendar(options);
+    await restarted.load();
+    const next = new WellnessService(restarted);
+    assert.equal(next.getProfile().profile.additionalContext, additionalContext);
+    assert.equal(next.getProfile().profile.maxBreakMinutes, 3);
+    assert.deepEqual(next.getProfile().profile.preferredActivities, ['stretch', 'rest']);
+    await next.saveProfile({ additionalContext: '' });
+    const cleared = new DemoCalendar(options);
+    await cleared.load();
+    assert.equal(new WellnessService(cleared).getProfile().profile.additionalContext, '');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('legacy profiles gain empty additional context without losing existing preferences', async () => {
+  const legacy = validateProfile({ nickname: 'Legacy', humor: 'gentle', seatedOnly: true, preferredActivities: ['rest'], maxBreakMinutes: 2 });
+  delete legacy.additionalContext;
+  const calendar = new DemoCalendar({ now: () => BASE, initialState: { activities: [], wellness: { profile: legacy } } });
+  const service = new WellnessService(calendar);
+  assert.equal(service.getProfile().configured, true);
+  assert.equal(service.getProfile().profile.additionalContext, '');
+  await service.saveProfile({ goals: ['breaks'] });
+  const profile = service.getProfile().profile;
+  assert.equal(profile.nickname, 'Legacy');
+  assert.equal(profile.humor, 'gentle');
+  assert.equal(profile.seatedOnly, true);
+  assert.deepEqual(profile.preferredActivities, ['rest']);
+  assert.equal(profile.maxBreakMinutes, 2);
+});
+
+test('additional context changes invalidate cached suggestions and reach the next provider request', async () => {
+  let now = BASE;
+  const calendar = new DemoCalendar({ now: () => now });
+  const inputs = [];
+  const provider = { async suggest(input) { inputs.push(input); return { ...input.candidates[0], quip: 'Tiny reset time.', reason: 'It fits your available time.', aiSource: 'grok' }; } };
+  const service = new WellnessService(calendar, { suggestionProvider: provider });
+  const first = await service.suggestions();
+  assert.ok(calendar.wellnessState.recommendationCache);
+  const additionalContext = 'I prefer quiet indoor breaks.\n午後は少し休みたい。';
+  await service.saveProfile({ goals: ['breaks'], additionalContext });
+  assert.equal(calendar.wellnessState.recommendationCache, null);
+  await assert.rejects(service.decide({ suggestionId: first.suggestion.id, decision: 'accept' }), error => error.error === 'preferences_changed');
+  now += 6000;
+  const next = await service.suggestions();
+  assert.notEqual(next.suggestion.id, first.suggestion.id);
+  assert.equal(inputs.length, 2);
+  assert.equal(inputs[1].profile.additionalContext, additionalContext);
+});
