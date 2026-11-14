@@ -1,0 +1,27 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Garmin: Build (SDK 9.1.0)",
+            "type": "process",
+            "command": "bash",
+            "args": ["${workspaceFolder}/scripts/ciq.sh", "build"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Garmin: Run in simulator (SDK 9.1.0)",
+            "type": "process",
+            "command": "bash",
+            "args": ["${workspaceFolder}/scripts/ciq.sh", "run"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Garmin: Test heist missions (SDK 9.1.0)",
+            "type": "process",
+            "command": "bash",
+            "args": ["${workspaceFolder}/scripts/ciq.sh", "test"],
+            "problemMatcher": []
+        }
+    ]
+}
