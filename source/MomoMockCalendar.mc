@@ -58,6 +58,10 @@ class MomoMockCalendar {
         if (status.equals("created")) {
             created.add(slotId);
             Application.Storage.setValue("mockCreatedSlots", created);
+            var storedWalks = Application.Storage.getValue("mockSavedWalks");
+            var walks = storedWalks instanceof Array ? (storedWalks as Array) : ([] as Array);
+            walks.add(label);
+            Application.Storage.setValue("mockSavedWalks", walks);
         }
         callback.invoke(200, {
             "status" => status,
@@ -65,6 +69,13 @@ class MomoMockCalendar {
             "eventUrl" => "",
             "mode" => "mock"
         });
+    }
+
+    // Labels of mock walks saved on this device, in save order. Persisted in
+    // Application.Storage so they survive app restarts.
+    function getSavedWalks() as Array {
+        var stored = Application.Storage.getValue("mockSavedWalks");
+        return stored instanceof Array ? (stored as Array) : ([] as Array);
     }
 
     private function getEvents() as Array {

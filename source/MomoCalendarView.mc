@@ -258,7 +258,7 @@ class MomoLegacyCalendarView extends WatchUi.View {
             if (slot != null) {
                 drawWrapped(dc, slot["label"] as String, 116);
             }
-            dc.drawText(130, 152, Graphics.FONT_XTINY, "8-minute walk", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(130, 152, Graphics.FONT_XTINY, savedCountText(), Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
             dc.drawText(130, 182, Graphics.FONT_XTINY, (_selected + 1) + " / " + _slots.size() + "   UP / DOWN", Graphics.TEXT_JUSTIFY_CENTER);
             hint = "START: schedule";
@@ -275,6 +275,11 @@ class MomoLegacyCalendarView extends WatchUi.View {
         }
         dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
         dc.drawText(130, 215, Graphics.FONT_XTINY, hint, Graphics.TEXT_JUSTIFY_CENTER);
+    }
+
+    private function savedCountText() as String {
+        var savedCount = getMock().getSavedWalks().size();
+        return savedCount > 0 ? "8-minute walk - " + savedCount + " saved" : "8-minute walk";
     }
 
     private function drawLines(dc as Graphics.Dc, lines as Array<String>, top as Number) as Void {
