@@ -8,6 +8,7 @@ import path from 'node:path';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const sdk = process.env.CIQ_SDK_PATH || (await readFile(path.join(homedir(), 'Library/Application Support/Garmin/ConnectIQ/current-sdk.cfg'), 'utf8')).trim();
 const key = process.env.CIQ_DEVELOPER_KEY || path.join(homedir(), 'Documents/developer_key');
+const requireGrok = process.env.REQUIRE_GROK === '1';
 const endpoint = JSON.parse(await readFile(path.join(root, '.local/calendar-endpoint.json'), 'utf8'));
 if (endpoint.mode !== 'demo' || !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(endpoint.url)) {
   throw new Error('Start npm run calendar:demo first to configure the HTTPS demo endpoint.');
@@ -26,6 +27,7 @@ class MomoCalendarSmokeApp extends Application.AppBase {
     }
 }
 class MomoCalendarSmokeView extends WatchUi.View {
+    const REQUIRE_GROK = ${requireGrok};
     var client;
     var suggestionId;
     var activity;
@@ -49,8 +51,15 @@ class MomoCalendarSmokeView extends WatchUi.View {
         if (code != 200 || data == null || !(data["suggestion"] instanceof Dictionary)) {
             fail("suggestions code=" + code + "; finish any pending demo activity first"); return;
         }
+        var source = data["aiSource"];
+        if (!(source instanceof String) || (!source.equals("grok") && !source.equals("fallback"))) {
+            fail("suggestion source was missing or invalid"); return;
+        }
+        if (REQUIRE_GROK && !source.equals("grok")) {
+            fail("live Grok required; received source=" + source); return;
+        }
         suggestionId = data["suggestion"]["id"];
-        System.println("CALENDAR_SMOKE: suggestion source=" + data["aiSource"]);
+        System.println("CALENDAR_SMOKE: suggestion source=" + source);
         // This explicit automated test accepts only a local demo activity.
         client.decide(suggestionId, "accept", method(:created));
     }
@@ -59,7 +68,10 @@ class MomoCalendarSmokeView extends WatchUi.View {
             fail("create code=" + code); return;
         }
         activity = data["activity"];
-        System.println("CALENDAR_SMOKE: created local demo walk");
+        if (!(activity instanceof Dictionary) || !(activity["title"] instanceof String)) {
+            fail("created activity title was missing"); return;
+        }
+        System.println("CALENDAR_SMOKE: created demo activity: " + activity["title"]);
         client.decide(suggestionId, "accept", method(:retried));
     }
     function retried(code, data) {

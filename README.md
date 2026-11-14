@@ -70,8 +70,10 @@ References: [Vercel storage integrations](https://vercel.com/docs/marketplace-st
 npm run calendar:test
 ./scripts/ciq.sh test
 npm run calendar:smoke
+# With XAI_API_KEY configured in the running service, require a real Grok reply:
+REQUIRE_GROK=1 npm run calendar:smoke
 ```
 
-The Node tests cover calendar conflicts, personalization, model validation/fallback, QR access, and serverless persistence. Native tests use the simulator's fonts and graphics to verify screens, controls, QR geometry, confirmation, timers, and step resets. The smoke test requires the local demo to run and intentionally creates/completes a demo activity; it refuses live Google URLs.
+The Node tests cover calendar conflicts, personalization, model validation/fallback, QR access, and serverless persistence. Native tests use the simulator's fonts and graphics to verify screens, controls, QR geometry, confirmation, timers, and step resets. The smoke test requires the local demo to run and intentionally creates/completes a demo activity; it refuses live Google URLs. `REQUIRE_GROK=1` also fails if the actual suggestion uses scripted fallback. A cached successful Grok suggestion may be reused.
 
 `./scripts/ciq.sh build` creates `bin/Momo.prg`. Build artifacts, `.env`, generated connection settings, local state, and signing keys are ignored by Git. The standalone Google Apps Script bridge under `integrations/google-calendar/` is preparation for a later real-calendar phase and is not used by this demo.

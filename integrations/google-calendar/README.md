@@ -1,5 +1,7 @@
 # Google Calendar bridge
 
+**Status:** this is a standalone bridge for the older calendar-only watch flow. The current Momo app uses the Node backend for QR onboarding, profiles, Grok suggestions, and demo events. There is no Google sign-in or connected Google account in that flow yet. This bridge supports only pairing, status, availability, and fixed eight-minute walk creation; switching the current watch endpoint to it will break the newer onboarding and suggestion actions. A future backend calendar adapter must connect real Google availability and bookings while retaining the current watch API.
+
 This single-owner Google Apps Script deployment avoids creating an OAuth client or running a server for the real integration. Google stores and refreshes the owner's authorization. Momo checks the primary calendar's free/busy periods and creates an eight-minute walking event only after confirmation.
 
 1. Create a standalone project at https://script.google.com/ and paste `Code.gs`.
