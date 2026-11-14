@@ -67,6 +67,19 @@ function momoSuggestionsRequireConfirmation(logger as Test.Logger) as Boolean {
 }
 
 (:test)
+function momoSensorSnapshotStaysBounded(logger as Test.Logger) as Boolean {
+    var reading = MomoSensors.snapshot();
+    Test.assert(reading["source"] instanceof String);
+    Test.assert(reading["source"].equals("watch") || reading["source"].equals("unavailable"));
+    var keys = ["steps", "stepGoal", "calories", "distanceMeters", "floorsClimbed", "heartRate", "restingHeartRate", "bodyBattery", "stress", "spo2", "respiration", "moveBarLevel", "elevationMeters", "pressureHpa", "temperatureC", "timeToRecoveryHours"] as Array<String>;
+    for (var i = 0; i < keys.size(); i += 1) {
+        Test.assert(reading.hasKey(keys[i]));
+    }
+    logger.debug("Sensor snapshot source: " + reading["source"]);
+    return true;
+}
+
+(:test)
 function momoForegroundTrackingDoesNotCreditMissingData(logger as Test.Logger) as Boolean {
     var tracker = new MomoActivityTracker(MomoActivityTestData.activity(), null);
     tracker.resume(0, 100);

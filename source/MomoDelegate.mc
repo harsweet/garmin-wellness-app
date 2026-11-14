@@ -35,12 +35,7 @@ class MomoDelegate extends WatchUi.BehaviorDelegate {
             return true;
         }
         var point = event.getCoordinates();
-        if (point[1] >= 240 && point[0] >= 94 && point[0] < 164) {
-            var phase = point[0] < 123 ? 0 : (point[0] < 139 ? 1 : 2);
-            _model.selectPhase(phase);
-            _view.refresh();
-            return true;
-        }
+        if (point[1] >= 240 && point[0] >= 94 && point[0] < 164) { return true; }
         if (point[1] >= 210) { return onSelect(); }
         nextRemark();
         return true;
@@ -95,11 +90,9 @@ class MomoDelegate extends WatchUi.BehaviorDelegate {
     }
 
     private function changePhase(direction as Number) as Boolean {
-        if (_view.isShowingHelp()) {
-            _view.toggleHelp();
-        }
-        _model.movePhase(direction);
-        _view.refresh();
+        if (_view.isShowingHelp()) { _view.toggleHelp(); }
+        else if (direction == 0) { _view.refresh(); }
+        else { nextRemark(); }
         return true;
     }
 }

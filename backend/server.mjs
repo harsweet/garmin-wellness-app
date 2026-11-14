@@ -112,6 +112,7 @@ export function createDemoServer(calendar = new DemoCalendar(), { wellness = new
         if (typeof body.slotId !== 'string') throw new CalendarError(400, 'invalid_slot', 'Choose a suggested slot.');
         return json(response, await calendar.book(body.slotId));
       }
+      if (body.action === 'sensors') return json(response, await wellness.sensors(body));
       if (body.action === 'suggestions') return json(response, await wellness.suggestions(body));
       if (body.action === 'decide') return json(response, await wellness.decide(body));
       if (body.action === 'start') return json(response, await wellness.start(body));

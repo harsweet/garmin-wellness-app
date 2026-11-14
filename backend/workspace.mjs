@@ -144,7 +144,7 @@ export class MomoWorkspace {
     const pending = capabilities.filter(item => !item.claimedAt && item.expiresAt > this.now());
     const pairingExpiresAt = pending.length ? new Date(Math.max(...pending.map(item => item.expiresAt))).toISOString() : null;
     const pairingState = dashboard.profileConfigured ? 'paired' : pairingExpiresAt ? 'waiting' : (calendar.wellnessState.onboarding?.sessions || []).some(item => item.expiresAt > this.now()) ? 'finishing' : 'idle';
-    return { pairingState, pairingExpiresAt, id, label: `Watch ${Object.keys(this.state.users).indexOf(id) + 1}`, createdAt: record.createdAt, updatedAt: record.updatedAt, configured: dashboard.profileConfigured, activeWatch: this.activeUserId() === id, profile: dashboard.profile, counts, preferences, sessions, decisions: decisions.slice(-200), suggestions: (calendar.wellnessState.suggestions || []).slice(-15).map(({ id, activityId, title, start, quip, reason, aiSource }) => ({ id, activityId, title, start, quip, reason, aiSource })) };
+    return { pairingState, pairingExpiresAt, id, label: `Watch ${Object.keys(this.state.users).indexOf(id) + 1}`, createdAt: record.createdAt, updatedAt: record.updatedAt, configured: dashboard.profileConfigured, activeWatch: this.activeUserId() === id, profile: dashboard.profile, counts, preferences, sessions, decisions: decisions.slice(-200), suggestions: (calendar.wellnessState.suggestions || []).slice(-15).map(({ id, activityId, title, start, quip, reason, aiSource }) => ({ id, activityId, title, start, quip, reason, aiSource })), mood: dashboard.mood || null, reading: calendar.wellnessState.lastReading || null };
   }
 
   adminData() {

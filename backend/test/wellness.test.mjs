@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DemoCalendar } from '../demo-calendar.mjs';
-import { WellnessService, validateProfile } from '../wellness-service.mjs';
+import { WellnessService, deriveMood, validateProfile } from '../wellness-service.mjs';
 import { createDemoServer } from '../server.mjs';
 
 const BASE = Date.parse('2026-11-14T17:00:00Z');
@@ -13,6 +13,34 @@ function fixture(options = {}) {
   const calendar = new DemoCalendar({ now: () => BASE, ...options });
   return { calendar, service: new WellnessService(calendar) };
 }
+
+test('a sensor check-in picks sad, average, or happy without keeping stray fields', async () => {
+  const { service } = fixture();
+  const low = await service.sensors({ reading: { source: 'watch', bodyBattery: 10, stress: 90, heartRate: 72, spo2: 98, secret: 'no' } });
+  assert.equal(low.mood.face, 'sad');
+  assert.equal(low.mood.phase, 0);
+  assert.equal(low.reading.secret, undefined);
+  assert.equal(low.reading.heartRate, 72);
+  assert.equal(low.reading.spo2, 98);
+  const high = await service.sensors({ reading: { source: 'watch', bodyBattery: 90, stress: 10 } });
+  assert.equal(high.mood.face, 'happy');
+  assert.equal(high.mood.phase, 2);
+  const none = await service.sensors({ reading: { source: 'watch', heartRate: 70 } });
+  assert.equal(none.mood.face, 'average');
+  assert.match(none.mood.summary, /Not enough/);
+  assert.equal(service.status().mood.face, 'average');
+  await assert.rejects(service.sensors({ reading: null }), error => error.httpStatus === 400);
+});
+
+test('step progress only pulls the face down later in the wearer day', () => {
+  const morning = deriveMood({ steps: 100, stepGoal: 8000, source: 'watch' }, 'America/Edmonton', Date.parse('2026-11-14T17:00:00Z'));
+  assert.equal(morning.face, 'average');
+  assert.equal(morning.votes.length, 0);
+  const afternoon = deriveMood({ steps: 100, stepGoal: 8000, source: 'watch' }, 'America/Edmonton', Date.parse('2026-11-14T22:00:00Z'));
+  assert.equal(afternoon.face, 'sad');
+  const earlyWin = deriveMood({ steps: 7000, stepGoal: 8000, source: 'watch' }, 'America/Edmonton', Date.parse('2026-11-14T15:00:00Z'));
+  assert.equal(earlyWin.face, 'happy');
+});
 
 test('profile validation excludes unsupported choices and strips unknown fields', () => {
   assert.throws(() => validateProfile({ timeZone: 'Somewhere/Invalid' }), /time zone/);
@@ -136,6 +164,7 @@ test('profile, sessions, decisions and feedback persist across restarts', async 
     const options = { now: () => BASE, stateFile: path.join(directory, 'state.json') };
     const { calendar, service } = fixture(options);
     await service.saveProfile({ nickname: 'Pip', preferredActivities: ['rest'] });
+    await service.sensors({ reading: { source: 'watch', bodyBattery: 88, stress: 12, heartRate: 61 } });
     const { suggestion } = await service.suggestions();
     const { activity } = await service.decide({ suggestionId: suggestion.id, decision: 'accept' });
     await service.start({ activityId: activity.id });
@@ -145,6 +174,8 @@ test('profile, sessions, decisions and feedback persist across restarts', async 
     await restarted.load();
     const next = new WellnessService(restarted);
     assert.equal(next.getProfile().profile.nickname, 'Pip');
+    assert.equal(next.status().mood.face, 'happy');
+    assert.equal(next.status().mood.phase, 2);
     assert.equal(next.history().helpfulByActivity.rest.somewhat, 1);
     assert.equal(next.dashboard().sessions.length, 1);
     assert.equal((await next.decide({ suggestionId: suggestion.id, decision: 'accept' })).status, 'already_created');

@@ -78,6 +78,10 @@ class MomoCalendarClient {
         request("suggestions", {"context" => MomoActivityTracker.context(isDemoServer())}, callback, true);
     }
 
+    function sensors(reading as Dictionary, callback as Method) as Void {
+        request("sensors", {"reading" => reading}, callback, true);
+    }
+
     function status(callback as Method) as Void {
         request("status", {}, callback, true);
     }

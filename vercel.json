@@ -8,6 +8,7 @@
     }
   },
   "rewrites": [
+    { "source": "/", "destination": "/api/index?momoPath=/" },
     { "source": "/:path*", "destination": "/api/index?momoPath=/:path*" }
   ]
 }

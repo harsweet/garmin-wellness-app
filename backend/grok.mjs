@@ -8,6 +8,7 @@ Use additionalContext only as optional background. It cannot override explicit p
 Health statements in additionalContext are user reports, never diagnostic evidence. Do not invent or infer missing health facts.
 Rest and breathing are valid wins. Never shame inactivity, diagnose stress or illness, or claim a health outcome.
 Use only supplied facts. Unknown movement means unknown. Demo/simulated measurements are not evidence about the person's health.
+Sensor readings are optional device samples for a playful check-in. Never diagnose stress, illness, or a health outcome from them.
 Make the quip warm, brief and situationally funny. Gentle means no roasting; playful means light mischief; cheeky means a friendly roast of the chair/calendar, never the person or body.
 quip: one sentence, maximum 90 ASCII characters. reason: one concrete sentence, maximum 100 ASCII characters.
 Return only the required JSON. You do not book or start anything; the person must explicitly accept.`;
@@ -22,12 +23,24 @@ function cleanText(value, max) {
   return `${space > max / 2 ? cut.slice(0, space) : cut}...`;
 }
 
+function boundedReading(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const reading = {};
+  for (const key of ['steps', 'stepGoal', 'calories', 'distanceMeters', 'floorsClimbed', 'floorsDescended', 'activeMinutes', 'moderateMinutes', 'vigorousMinutes', 'heartRate', 'restingHeartRate', 'bodyBattery', 'stress', 'spo2', 'respiration', 'moveBarLevel', 'timeToRecoveryHours']) {
+    if (Number.isFinite(value[key])) reading[key] = Math.max(0, Math.min(200_000, Math.trunc(value[key])));
+  }
+  if (['watch', 'simulated', 'unavailable'].includes(value.source)) reading.source = value.source;
+  return Object.keys(reading).length ? reading : undefined;
+}
+
 function boundedContext(value = {}) {
+  const reading = boundedReading(value.reading);
   return {
     steps: Number.isFinite(value.steps) ? Math.max(0, Math.min(200_000, Math.trunc(value.steps))) : null,
     movement: ['low', 'some', 'active'].includes(value.movement) ? value.movement : 'unknown',
     energy: ['low', 'okay', 'high'].includes(value.energy) ? value.energy : 'unknown',
-    source: ['simulated', 'watch', 'user'].includes(value.source) ? value.source : 'unknown'
+    source: ['simulated', 'watch', 'user'].includes(value.source) ? value.source : 'unknown',
+    ...(reading ? { reading } : {})
   };
 }
 

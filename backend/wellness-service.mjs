@@ -32,14 +32,69 @@ export function validateProfile(input, defaults = DEFAULT_PROFILE) {
   return profile;
 }
 
+const integerIn = (value, min, max) => Number.isInteger(value) && value >= min && value <= max ? value : null;
+const numberIn = (value, min, max) => Number.isFinite(value) && value >= min && value <= max ? Math.round(value * 10) / 10 : null;
+
+export function normalizeReading(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  return {
+    source: ['watch', 'simulated', 'unavailable'].includes(input.source) ? input.source : 'unavailable',
+    steps: integerIn(input.steps, 0, 200_000),
+    stepGoal: integerIn(input.stepGoal, 1, 200_000),
+    calories: integerIn(input.calories, 0, 20_000),
+    distanceMeters: numberIn(input.distanceMeters, 0, 200_000),
+    floorsClimbed: integerIn(input.floorsClimbed, 0, 10_000),
+    floorsDescended: integerIn(input.floorsDescended, 0, 10_000),
+    activeMinutes: integerIn(input.activeMinutes, 0, 1_440),
+    moderateMinutes: integerIn(input.moderateMinutes, 0, 1_440),
+    vigorousMinutes: integerIn(input.vigorousMinutes, 0, 1_440),
+    heartRate: integerIn(input.heartRate, 30, 220),
+    restingHeartRate: integerIn(input.restingHeartRate, 30, 120),
+    bodyBattery: integerIn(input.bodyBattery, 0, 100),
+    stress: integerIn(input.stress, 0, 100),
+    spo2: integerIn(input.spo2, 50, 100),
+    respiration: integerIn(input.respiration, 4, 60),
+    elevationMeters: numberIn(input.elevationMeters, -500, 9_000),
+    pressureHpa: numberIn(input.pressureHpa, 300, 1_100),
+    temperatureC: numberIn(input.temperatureC, -40, 60),
+    timeToRecoveryHours: integerIn(input.timeToRecoveryHours, 0, 240),
+    moveBarLevel: integerIn(input.moveBarLevel, 0, 5)
+  };
+}
+
+export function deriveMood(reading, timeZone = 'UTC', now = Date.now()) {
+  const votes = [];
+  if (reading?.bodyBattery != null) votes.push({ id: 'bodyBattery', label: 'Body battery', value: reading.bodyBattery, vote: reading.bodyBattery < 30 ? -1 : reading.bodyBattery > 60 ? 1 : 0 });
+  if (reading?.stress != null) votes.push({ id: 'stress', label: 'Stress', value: reading.stress, vote: reading.stress >= 75 ? -1 : reading.stress < 25 ? 1 : 0 });
+  if (reading?.steps != null && reading.stepGoal) {
+    const progress = reading.steps / reading.stepGoal;
+    let hour = 12;
+    try { hour = Number(new Intl.DateTimeFormat('en', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(new Date(now))); } catch { hour = 12; }
+    if (progress >= 0.75) votes.push({ id: 'steps', label: 'Step progress', value: Math.round(progress * 100), vote: 1 });
+    else if (hour >= 14 && progress < 0.25) votes.push({ id: 'steps', label: 'Step progress', value: Math.round(progress * 100), vote: -1 });
+  }
+  const sum = votes.reduce((total, item) => total + item.vote, 0);
+  const face = !votes.length || sum === 0 ? 'average' : sum < 0 ? 'sad' : 'happy';
+  const phase = face === 'sad' ? 0 : face === 'happy' ? 2 : 1;
+  const summary = !votes.length ? 'Not enough of a reading yet. Middle face for now.' : face === 'sad' ? 'A slower check-in. The sleepy face fits.' : face === 'happy' ? 'A brighter check-in. The happy face fits.' : 'A mixed check-in. The middle face fits.';
+  return { face, phase, title: ['SLOW DAY', "JUST CHILLIN'", 'MAIN CHARACTER'][phase], summary, votes };
+}
+
 export function normalizeContext(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};
-  return {
-    steps: Number.isInteger(input.steps) && input.steps >= 0 && input.steps <= 200_000 ? input.steps : null,
+  const reading = normalizeReading(input.reading);
+  const context = {
+    steps: Number.isInteger(input.steps) && input.steps >= 0 && input.steps <= 200_000 ? input.steps : reading?.steps ?? null,
     movement: ['low', 'some', 'active', 'unknown'].includes(input.movement) ? input.movement : 'unknown',
     energy: ['low', 'okay', 'high', 'unknown'].includes(input.energy) ? input.energy : 'unknown',
     source: ['simulated', 'watch', 'user'].includes(input.source) ? input.source : 'user'
   };
+  if (reading) {
+    if (context.movement === 'unknown' && reading.moveBarLevel != null) context.movement = reading.moveBarLevel >= 3 ? 'low' : reading.moveBarLevel === 0 ? 'active' : 'some';
+    if (context.energy === 'unknown' && reading.bodyBattery != null) context.energy = reading.bodyBattery < 30 ? 'low' : reading.bodyBattery <= 60 ? 'okay' : 'high';
+    context.reading = reading;
+  }
+  return context;
 }
 
 function fallback(candidates, context) {
@@ -127,7 +182,22 @@ export class WellnessService {
   }
 
   status() {
-    return { ...this.calendar.status(), profileConfigured: this.profileConfigured, profileRevision: this.profileRevision, userId: this.userId || null, aiConfigured: !!this.suggestionProvider?.isConfigured?.(), aiSource: this.lastAiSource, checkIn: this.checkIn(), snoozedUntil: this.calendar.wellnessState.snoozedUntil || null };
+    return { ...this.calendar.status(), profileConfigured: this.profileConfigured, profileRevision: this.profileRevision, userId: this.userId || null, aiConfigured: !!this.suggestionProvider?.isConfigured?.(), aiSource: this.lastAiSource, checkIn: this.checkIn(), snoozedUntil: this.calendar.wellnessState.snoozedUntil || null, mood: this.calendar.wellnessState.lastMood || null };
+  }
+
+  rememberReading(reading, context) {
+    const mood = deriveMood(reading, this.profile.timeZone, this.calendar.now());
+    const stored = { ...reading, at: new Date(this.calendar.now()).toISOString() };
+    return this.calendar.updateWellness(state => { state.lastReading = stored; state.lastMood = mood; if (context) state.lastContext = context; }).then(() => ({ mood, reading: stored }));
+  }
+
+  sensors({ reading } = {}) {
+    return this.operation(async () => {
+      const context = normalizeContext({ ...(reading && typeof reading === 'object' ? { source: reading.source } : {}), reading });
+      if (!context.reading) throw new CalendarError(400, 'invalid_reading', 'Provide a sensor reading.');
+      this.lastContext = context;
+      return { ...this.status(), ...(await this.rememberReading(context.reading, context)) };
+    });
   }
 
   dashboard() {
@@ -150,6 +220,11 @@ export class WellnessService {
   }
 
   suggestions(options = {}) {
+    if (options.context?.reading && !options._readingSaved) {
+      const context = normalizeContext(options.context);
+      this.lastContext = context;
+      return this.rememberReading(context.reading, context).then(() => this.suggestions({ ...options, context, _readingSaved: true }));
+    }
     const now = this.calendar.now();
     const pending = this.checkIn();
     if (pending) return Promise.resolve({ ...this.status(), status: 'check_in', suggestion: null, checkIn: structuredClone(pending), message: pending.status === 'completed' ? 'Did your last break help?' : 'Your little escape is ready to resume.' });
@@ -161,7 +236,7 @@ export class WellnessService {
     this.latestContextFingerprint = fingerprint;
     const snoozedUntil = this.calendar.wellnessState.snoozedUntil;
     if (snoozedUntil && Date.parse(snoozedUntil) > now) return Promise.resolve({ ...this.status(), suggestion: null, status: 'snoozed', message: 'Momo is giving you some room. Check back after your snooze.' });
-    if (!options.excludeSuggestionId && this.cached && this.cached.until > now && this.cached.fingerprint === fingerprint) return Promise.resolve(structuredClone(this.cached.response));
+    if (!options.excludeSuggestionId && this.cached && this.cached.until > now && this.cached.fingerprint === fingerprint) return Promise.resolve({ ...structuredClone(this.cached.response), mood: this.calendar.wellnessState.lastMood || null });
     if (this.inflight && !options.excludeSuggestionId && this.inflight.fingerprint === fingerprint) return this.inflight.promise;
     const request = this.generateSuggestion({ ...options, context, fingerprint });
     if (!options.excludeSuggestionId) {

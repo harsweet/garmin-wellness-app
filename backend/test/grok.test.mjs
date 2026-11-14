@@ -88,3 +88,23 @@ test('additional context reaches Grok as bounded untrusted profile data with Uni
   await provider.suggest(input);
   assert.equal(JSON.parse(requestBody.input[0].content).profile.additionalContext, '');
 });
+
+test('watch sensor samples reach Grok as bounded optional check-in data', async () => {
+  let requestBody;
+  const provider = new GrokSuggestions({ apiKey: 'test', fetchImpl: async (url, options) => { requestBody = JSON.parse(options.body); return apiReply(result); } });
+  await provider.suggest({
+    ...input,
+    context: {
+      ...input.context,
+      reading: { source: 'watch', bodyBattery: 41, stress: 18, heartRate: 64, spo2: 98, calories: 612, activeMinutes: 22, floorsClimbed: 4, timeToRecoveryHours: 8, elevationMeters: 1045, secret: 'must-not-share' }
+    }
+  });
+  const supplied = JSON.parse(requestBody.input[0].content);
+  assert.equal(supplied.context.reading.source, 'watch');
+  assert.equal(supplied.context.reading.bodyBattery, 41);
+  assert.equal(supplied.context.reading.floorsClimbed, 4);
+  assert.equal(supplied.context.reading.timeToRecoveryHours, 8);
+  assert.equal(supplied.context.reading.secret, undefined);
+  assert.equal(supplied.context.reading.elevationMeters, undefined);
+  assert.match(requestBody.instructions, /Sensor readings are optional device samples/);
+});

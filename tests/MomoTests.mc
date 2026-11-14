@@ -9,22 +9,23 @@ function momoNavigationAndQuips(logger as Test.Logger) as Boolean {
     var view = new MomoView(model);
     var delegate = new MomoDelegate(view, model);
     Test.assertEqual(model.getPhase(), 1);
-    delegate.onPreviousPage();
+    model.applyMood(0);
     Test.assertEqual(model.getPhase(), 0);
+    model.applyMood(0);
+    Test.assertEqual(model.getRemark(), model.getRemark());
     var first = model.getRemark();
-    for (var i = 0; i < 4; i += 1) {
-        delegate.nextRemark();
-    }
-    Test.assertEqual(model.getRemark(), first);
-    delegate.onPreviousPage();
-    Test.assertEqual(model.getPhase(), 2);
     delegate.onNextPage();
+    Test.assert(model.getRemark().equals(first) == false);
+    for (var i = 0; i < 3; i += 1) { delegate.onPreviousPage(); }
+    Test.assertEqual(model.getRemark(), first);
     Test.assertEqual(model.getPhase(), 0);
+    model.applyMood(2);
+    Test.assertEqual(model.getPhase(), 2);
     view.toggleHelp();
     Test.assert(view.isShowingHelp());
     delegate.onBack();
     Test.assert(!view.isShowingHelp());
-    logger.debug("Physical-button behaviors, mood wraparound, quips, and help passed.");
+    logger.debug("Physical-button behaviors, backend mood, quips, and help passed.");
     return true;
 }
 

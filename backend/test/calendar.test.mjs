@@ -84,6 +84,11 @@ test('actual HTTP contract supports watch requests and calendar page updates', a
   assert.equal(availability.slots.length, 3);
   const reply = await post({ action: 'activities', token: 'momo-demo', slotId: availability.slots[0].id });
   assert.equal(reply.status, 'created');
+  const sensors = await post({ action: 'sensors', token: 'momo-demo', reading: { source: 'watch', bodyBattery: 12, stress: 88, heartRate: 64, secret: 'no' } });
+  assert.equal(sensors.mood.face, 'sad');
+  assert.equal(sensors.mood.phase, 0);
+  assert.equal(sensors.reading.heartRate, 64);
+  assert.equal(sensors.reading.secret, undefined);
   const events = await (await fetch(`${base}/api/demo`)).json();
   assert.equal(events.activities, 1);
   assert.ok(events.events.some(event => event.title === 'Momo: 8-minute walk'));

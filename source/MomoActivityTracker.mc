@@ -37,7 +37,8 @@ class MomoActivityTracker {
     }
 
     static function context(demo as Boolean) as Dictionary {
-        return {"steps" => readSteps(), "movement" => "unknown", "energy" => "unknown", "source" => demo ? "simulated" : "watch"};
+        var reading = MomoSensors.snapshot();
+        return {"steps" => reading["steps"], "movement" => "unknown", "energy" => "unknown", "source" => demo ? "simulated" : "watch", "reading" => reading};
     }
 
     function resume(nowMs as Number, dailySteps as Number or Null) as Void {

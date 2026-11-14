@@ -1,9 +1,13 @@
 import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.Timer;
 import Toybox.WatchUi;
 
 class MomoView extends WatchUi.View {
     private var _model as MomoModel;
+    private var _client as MomoCalendarClient;
+    private var _timer as Timer.Timer or Null = null;
+    private var _polling as Boolean = false;
     private var _bitmap as Graphics.BitmapType or Null = null;
     private var _loadedPhase as Number = -1;
     private var _help as Boolean = false;
@@ -14,6 +18,15 @@ class MomoView extends WatchUi.View {
     function initialize(model as MomoModel) {
         View.initialize();
         _model = model;
+        _client = new MomoCalendarClient();
+    }
+
+    function onShow() as Void {
+        refreshMood();
+        if (_timer == null) {
+            _timer = new Timer.Timer();
+            _timer.start(method(:refreshMood), 180000, true);
+        }
     }
 
     function isShowingHelp() as Boolean {
@@ -30,8 +43,28 @@ class MomoView extends WatchUi.View {
     }
 
     function onHide() as Void {
+        if (_timer != null) { _timer.stop(); _timer = null; }
+        _client.cancel();
+        _polling = false;
         _bitmap = null;
         _loadedPhase = -1;
+    }
+
+    function refreshMood() as Void {
+        if (_polling) { return; }
+        _polling = true;
+        _client.sensors(MomoSensors.snapshot(), method(:handleMood));
+    }
+
+    function handleMood(code as Number, data as Dictionary or Null) as Void {
+        _polling = false;
+        if (code < 200 || code >= 300 || data == null) { return; }
+        var mood = data["mood"];
+        if (!(mood instanceof Dictionary)) { return; }
+        var phase = (mood as Dictionary)["phase"];
+        if (!(phase instanceof Number)) { return; }
+        _model.applyMood(phase as Number);
+        WatchUi.requestUpdate();
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -65,7 +98,7 @@ class MomoView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_WHITE, BG);
         drawRemark(dc, _model.getRemark());
 
-        // Three touch targets match the three demo phases; no invented health score.
+        // Dots show the backend face. They are not a health score and are not selectable.
         for (var i = 0; i < _model.PHASE_COUNT; i += 1) {
             dc.setColor(i == _model.getPhase() ? _model.getAccent() : 0x555555, BG);
             if (i == _model.getPhase()) {
@@ -122,11 +155,11 @@ class MomoView extends WatchUi.View {
         dc.setColor(0x55FFAA, BG);
         dc.drawText(130, 27, Graphics.FONT_SMALL, "Meet Momo", Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_WHITE, BG);
-        var lines = ["START: next idea", "Tap Momo: new quip", "UP / DOWN: mood", "Hold UP: setup & menu", "BACK: return"];
+        var lines = ["START: next idea", "Tap Momo: new quip", "UP / DOWN: new quip", "Hold UP: setup & menu", "BACK: return"];
         for (var i = 0; i < lines.size(); i += 1) {
             MomoUi.text(dc, lines[i], 68 + i * 24, MomoUi.INK);
         }
         dc.setColor(MUTED, BG);
-        MomoUi.text(dc, "Sample day remarks", 207, MomoUi.MUTED);
+        MomoUi.text(dc, "Face follows check-in", 207, MomoUi.MUTED);
     }
 }

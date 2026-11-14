@@ -1,7 +1,6 @@
 import Toybox.Lang;
 
-// All day descriptions are demo fixtures. Nothing here reads live health data.
-// Later integrations can replace this model's input without changing the view.
+// Remarks stay local. The face itself comes from the backend check-in.
 class MomoModel {
     const SLEEPY = 0;
     const CHILL = 1;
@@ -36,6 +35,11 @@ class MomoModel {
 
     function getPhase() as Number {
         return _phase;
+    }
+
+    function applyMood(phase as Number) as Void {
+        var next = ((phase % PHASE_COUNT) + PHASE_COUNT) % PHASE_COUNT;
+        if (next != _phase) { selectPhase(next); }
     }
 
     function selectPhase(phase as Number) as Void {

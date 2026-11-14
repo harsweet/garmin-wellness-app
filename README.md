@@ -49,7 +49,7 @@ Each paired watch is its own row: goals, saved context, completions, accepts, sn
 
 Local data is stored in gitignored `.local/workspace.json`; the previous single-user `.local/demo-calendar.json` is migrated automatically on first launch. Existing profile context and activity history are preserved.
 
-The three home-screen moods and their day remarks remain selectable demo states. Activity tracking pauses when its screen is hidden; this version does not provide background tracking, sleep analysis, or verified health outcomes. Simulator completion evidence is labeled simulated. Suggestions are requested in the app; all-day background notifications are not implemented.
+The home-screen face follows the latest sensor check-in from the backend: sad (slow day), average, or happy. UP/DOWN only cycles the remark. Admin shows the reading and which signals chose the face. That check-in is not a health diagnosis. Activity tracking pauses when its screen is hidden; this version does not provide background tracking, sleep analysis, or verified health outcomes. Simulator completion evidence is labeled simulated. Suggestions are requested in the app; all-day background notifications are not implemented.
 
 ## Deploy to Vercel
 

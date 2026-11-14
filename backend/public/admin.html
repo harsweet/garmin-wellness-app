@@ -46,11 +46,12 @@
           <section class="detail" id="user-detail" aria-labelledby="wearer-title" hidden>
             <div class="section-heading"><div><p class="small-note" id="wearer-id"></p><h2 id="wearer-title"></h2></div><span class="badge" id="wearer-state"></span></div>
             <div class="profile-footer"><span id="wearer-updated"></span><button class="button quiet" id="assign-watch" type="button">Show on this simulator</button></div>
+            <section class="checkin" id="checkin"><div class="section-heading"><h3>How they're doing</h3><span class="badge" id="mood-face">No reading</span></div><p class="section-copy" id="mood-summary">Waiting for the watch to send a sensor check-in.</p><div id="sensor-grid" class="sensor-grid"></div><p class="small-note" id="mood-meta"></p></section>
             <div class="section-heading"><h3>What feels good?</h3><p class="small-note">Explicit feedback, by activity</p></div>
             <div class="table-scroll"><table><thead><tr><th>Activity</th><th>Accepted</th><th>Completed</th><th>Helpful</th><th>Somewhat</th><th>Not helpful</th><th>Snoozed</th></tr></thead><tbody id="preference-rows"></tbody></table></div>
             <details class="history"><summary>Activity & feedback <span id="history-count"></span></summary><ol id="history-list"></ol></details>
           </section>
-          <p class="data-note">Separate goals and activity history for every device. Demo calendar bookings and simulated completions are labeled in the activity log.</p>
+          <p class="data-note">Separate goals and activity history for every device. Demo calendar bookings and simulated completions are labeled in the activity log. The face is a check-in from body battery, stress, and step progress, not a health diagnosis.</p>
         </section>
       </main>
       <footer><span>Small breaks. Excellent monkey business.</span><span>momo · watch room</span></footer>

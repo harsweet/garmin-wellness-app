@@ -156,10 +156,33 @@
     }));
   }
 
+  function sensorValue(reading, key) {
+    const value = reading?.[key];
+    return value === null || value === undefined ? '—' : String(value);
+  }
+
+  function renderCheckin(user) {
+    const mood = user.mood;
+    const reading = user.reading;
+    const face = mood?.face || '';
+    $('#mood-face').textContent = face === 'sad' ? 'Sad' : face === 'happy' ? 'Happy' : face === 'average' ? 'Average' : 'No reading';
+    $('#mood-face').className = `badge${face ? ` ${face}` : ''}`;
+    $('#mood-summary').textContent = mood?.summary || 'Waiting for the watch to send a sensor check-in.';
+    const rows = [['Steps', reading?.steps != null && reading?.stepGoal ? `${reading.steps} / ${reading.stepGoal}` : sensorValue(reading, 'steps')], ['Calories', sensorValue(reading, 'calories')], ['Distance m', sensorValue(reading, 'distanceMeters')], ['Active min', sensorValue(reading, 'activeMinutes')], ['Moderate min', sensorValue(reading, 'moderateMinutes')], ['Vigorous min', sensorValue(reading, 'vigorousMinutes')], ['Floors up', sensorValue(reading, 'floorsClimbed')], ['Floors down', sensorValue(reading, 'floorsDescended')], ['Heart rate', sensorValue(reading, 'heartRate')], ['Resting HR', sensorValue(reading, 'restingHeartRate')], ['Body battery', sensorValue(reading, 'bodyBattery')], ['Stress', sensorValue(reading, 'stress')], ['SpO2', sensorValue(reading, 'spo2')], ['Breaths', sensorValue(reading, 'respiration')], ['Move bar', sensorValue(reading, 'moveBarLevel')], ['Elevation m', sensorValue(reading, 'elevationMeters')], ['Pressure hPa', sensorValue(reading, 'pressureHpa')], ['Temp C', sensorValue(reading, 'temperatureC')], ['Recovery h', sensorValue(reading, 'timeToRecoveryHours')]];
+    $('#sensor-grid').replaceChildren(...rows.map(([label, value]) => {
+      const cell = text('div', '');
+      cell.append(text('span', label), text('strong', value));
+      return cell;
+    }));
+    const votes = Array.isArray(mood?.votes) && mood.votes.length ? mood.votes.map(item => `${item.label} ${item.value} (${item.vote > 0 ? '+' : ''}${item.vote})`).join(' · ') : 'No face vote yet.';
+    $('#mood-meta').textContent = reading?.at ? `${reading.source === 'watch' ? 'Watch' : reading.source === 'simulated' ? 'Simulated' : 'No'} reading · ${date(reading.at)} · ${votes}` : votes;
+  }
+
   function renderUser() {
     const user = users.find(item => item.id === selectedId);
     $('#user-detail').hidden = !user;
     if (!user) return;
+    renderCheckin(user);
     $('#wearer-id').textContent = user.id.slice(0, 8);
     $('#wearer-title').textContent = user.label;
     $('#wearer-state').textContent = user.activeWatch ? 'This simulator' : pairingLabels[user.pairingState];
