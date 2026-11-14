@@ -83,7 +83,7 @@ export class WellnessService {
     return result;
   }
 
-  getProfile() { return { profile: structuredClone(this.profile), configured: this.profileConfigured }; }
+  getProfile() { return { profile: structuredClone(this.profile), configured: this.profileConfigured, profileRevision: this.profileRevision, userId: this.userId || null }; }
 
   saveProfile(input) {
     return this.operation(async () => {
@@ -127,7 +127,7 @@ export class WellnessService {
   }
 
   status() {
-    return { ...this.calendar.status(), profileConfigured: this.profileConfigured, aiConfigured: !!this.suggestionProvider?.isConfigured?.(), aiSource: this.lastAiSource, checkIn: this.checkIn(), snoozedUntil: this.calendar.wellnessState.snoozedUntil || null };
+    return { ...this.calendar.status(), profileConfigured: this.profileConfigured, profileRevision: this.profileRevision, userId: this.userId || null, aiConfigured: !!this.suggestionProvider?.isConfigured?.(), aiSource: this.lastAiSource, checkIn: this.checkIn(), snoozedUntil: this.calendar.wellnessState.snoozedUntil || null };
   }
 
   dashboard() {

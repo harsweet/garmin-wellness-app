@@ -57,7 +57,7 @@ test('serverless cold starts preserve QR onboarding, profiles, and accepted acti
   assert.equal(accepted.status, 'created');
   const repeated = (await call('/', { action: 'decide', suggestionId: suggestion.id, decision: 'accept' })).data;
   assert.equal(repeated.status, 'already_created');
-  assert.equal(store.state.activities.length, 1);
+  assert.equal(store.state.users[store.state.defaultUserId].calendar.activities.length, 1);
   assert.equal((await call('/api/profile', null, cookie)).data.profile.nickname, 'Ari');
   const denied = await call('/', { action: 'suggestions' }, cookie, false);
   assert.equal(denied.data.httpStatus, 401, 'A phone session cannot invoke the AI or act as the watch.');

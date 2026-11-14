@@ -11,28 +11,34 @@
   const setupContent = $('#setup-content');
   const setupComplete = $('#setup-complete');
   const connectionBanner = $('#connection-banner');
+  const codeForm = $('#setup-code-form');
+  const codeInput = $('#setup-code');
+  const codeButton = $('#connect-code');
+  const codeStatus = $('#setup-code-status');
   const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Edmonton';
   let accessReady = false;
   let initializing = false;
   let saving = false;
   let configured = false;
+  let claimingCode = false;
 
   function setSaveStatus(message, error = false) {
     saveStatus.textContent = message;
     saveStatus.className = `save-status${error ? ' error' : ''}`;
   }
 
-  function showAccessNotice(title, message) {
+  function showAccessNotice(title, message, allowCode = true) {
     accessReady = false;
     accessNotice.hidden = false;
     $('#access-title').textContent = title;
     $('#access-message').textContent = message;
     setupContent.hidden = true;
     setupComplete.hidden = true;
+    codeForm.hidden = !allowCode;
   }
 
   function showExpiredAccess() {
-    showAccessNotice('Scan a fresh code from Momo.', 'This setup link has expired or already been used. Open Momo on your watch and scan its new QR code.');
+    showAccessNotice('Let’s try a fresh code.', 'This link may have expired or already been used. Open Momo on your watch for a new QR code or four-digit code.');
     connectionBanner.hidden = true;
   }
 
@@ -74,6 +80,7 @@
     try {
       const key = new URLSearchParams(location.hash.slice(1)).get('key');
       if (key) {
+        showAccessNotice('Connecting to Momo…', 'Getting your goals ready.', false);
         try {
           await request('/api/onboarding/claim', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Momo-Request': '1' }, body: JSON.stringify({ key })
@@ -97,7 +104,7 @@
         connectionBanner.hidden = true;
       } catch (error) {
         if ([401, 403].includes(error.status)) {
-          showAccessNotice('Start with Momo on your watch.', 'Scan the QR code on your watch to choose your goals here.');
+          showAccessNotice('A little hello from your watch.', 'Enter Momo’s four-digit setup code below, or scan the QR code on your watch.');
           connectionBanner.hidden = true;
         } else {
           showAccessNotice('Couldn’t connect to Momo.', 'Your goals couldn’t be loaded. Please try again.');
@@ -149,6 +156,54 @@
       saveButton.disabled = false;
       saveLabel.textContent = 'Save & return to watch';
     }
+  });
+
+  codeForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (claimingCode || initializing) return;
+    const code = codeInput.value.trim();
+    if (!/^\d{4}$/.test(code)) {
+      codeStatus.textContent = 'Enter all four digits shown on Momo.';
+      codeStatus.className = 'code-status error';
+      codeInput.setAttribute('aria-invalid', 'true');
+      codeInput.focus();
+      return;
+    }
+    claimingCode = true;
+    codeButton.disabled = true;
+    codeButton.textContent = 'Connecting…';
+    codeStatus.textContent = 'Finding your little sidekick.';
+    codeStatus.className = 'code-status';
+    try {
+      await request('/api/onboarding/claim', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Momo-Request': '1' }, body: JSON.stringify({ code })
+      });
+      // A successful claim exchanges the one-use code for an HttpOnly session.
+      // Any old QR fragment can now be removed, without retaining either code.
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+      codeInput.value = '';
+      await initializeAccess();
+    } catch (error) {
+      codeStatus.textContent = error.status === 429
+        ? 'Too many tries. Wait a few minutes, or scan Momo’s QR code.'
+        : [400, 401, 403, 410].includes(error.status)
+          ? 'That code didn’t work. Open Momo for a fresh one.'
+          : 'Momo couldn’t connect. Please try again.';
+      codeStatus.className = 'code-status error';
+      codeInput.setAttribute('aria-invalid', 'true');
+      codeInput.focus();
+    } finally {
+      claimingCode = false;
+      codeButton.disabled = false;
+      codeButton.textContent = 'Connect to Momo';
+    }
+  });
+
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 4);
+    codeInput.removeAttribute('aria-invalid');
+    codeStatus.textContent = 'Or scan the QR code on your watch.';
+    codeStatus.className = 'code-status';
   });
 
   context.addEventListener('input', updateContextCount);

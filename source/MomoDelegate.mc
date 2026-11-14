@@ -24,8 +24,7 @@ class MomoDelegate extends WatchUi.BehaviorDelegate {
         if (_view.isShowingHelp()) {
             _view.toggleHelp();
         } else {
-            _model.nextRemark();
-            _view.refresh();
+            openSuggestions();
         }
         return true;
     }
@@ -36,13 +35,15 @@ class MomoDelegate extends WatchUi.BehaviorDelegate {
             return true;
         }
         var point = event.getCoordinates();
-        if (point[1] >= 224 && point[0] >= 94 && point[0] < 164) {
+        if (point[1] >= 240 && point[0] >= 94 && point[0] < 164) {
             var phase = point[0] < 123 ? 0 : (point[0] < 139 ? 1 : 2);
             _model.selectPhase(phase);
             _view.refresh();
             return true;
         }
-        return onSelect();
+        if (point[1] >= 210) { return onSelect(); }
+        nextRemark();
+        return true;
     }
 
     function onSwipe(event as WatchUi.SwipeEvent) as Boolean {
@@ -51,9 +52,32 @@ class MomoDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onMenu() as Boolean {
+        var choices = new MomoChoiceView("Hey, you.", homeChoices(), method(:onHomeChoice));
+        WatchUi.pushView(choices, new MomoChoiceDelegate(choices), WatchUi.SLIDE_LEFT);
+        return true;
+    }
+
+    function homeChoices() as Array<Dictionary> {
+        return [{"id" => :suggestions, "label" => "Next idea", "detail" => "A little time for you"},
+            {"id" => :setup, "label" => "Setup", "detail" => "Your goals & preferences"},
+            {"id" => :help, "label" => "Controls", "detail" => "Meet your little sidekick"}];
+    }
+
+    function primaryAction() as Symbol { return :suggestions; }
+
+    function onHomeChoice(id as Symbol) as Void {
+        if (id == :suggestions) { openSuggestions(); }
+        else if (id == :setup) {
+            var setup = new MomoOnboardingView(); setup.setReturnToPrevious(true);
+            WatchUi.pushView(setup, new MomoOnboardingDelegate(setup), WatchUi.SLIDE_LEFT);
+        } else { _view.toggleHelp(); }
+    }
+
+    function nextRemark() as Void { _model.nextRemark(); _view.refresh(); }
+
+    function openSuggestions() as Void {
         var calendarView = new MomoCalendarView();
         WatchUi.pushView(calendarView, new MomoCalendarDelegate(calendarView), WatchUi.SLIDE_LEFT);
-        return true;
     }
 
     function onHold(event as WatchUi.ClickEvent) as Boolean {

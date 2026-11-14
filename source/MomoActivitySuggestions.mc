@@ -84,13 +84,23 @@ class MomoCalendarView extends MomoLegacyCalendarView {
             if (getState() != :loading) { refresh(); }
             return;
         }
-        var menu = new WatchUi.Menu2({:title => "What do you think?"});
-        menu.addItem(new WatchUi.MenuItem("Let's go", "Reserve this break", :accept, null));
-        menu.addItem(new WatchUi.MenuItem("Later", "Give me some room", :snooze, null));
-        menu.addItem(new WatchUi.MenuItem("Something else", "Try a different idea", :alternative, null));
-        menu.addItem(new WatchUi.MenuItem("Why this?", null, :why, null));
-        if (!_profileConfigured) { menu.addItem(new WatchUi.MenuItem("Personalize Momo", "Setup on your computer", :profile, null)); }
-        WatchUi.pushView(menu, new MomoSuggestionOptionsDelegate(self), WatchUi.SLIDE_LEFT);
+        var choices = new MomoChoiceView("Your move", actionChoices(), method(:onAction));
+        WatchUi.pushView(choices, new MomoChoiceDelegate(choices), WatchUi.SLIDE_LEFT);
+    }
+
+    function actionChoices() as Array<Dictionary> {
+        return [{"id" => :accept, "label" => "Let's go", "detail" => "Review & save this break"},
+            {"id" => :snooze, "label" => "Later", "detail" => "Give me breathing room"},
+            {"id" => :alternative, "label" => "Something else", "detail" => "Find a different idea"},
+            {"id" => :why, "label" => "Why this?", "detail" => "What Momo considered"},
+            {"id" => :profile, "label" => "Setup", "detail" => "Update your preferences"}];
+    }
+
+    function onAction(id as Symbol) as Void {
+        if (id == :accept) { requestAccept(); }
+        else if (id == :snooze) { decide("snooze"); }
+        else if (id == :alternative) { decide("alternative"); }
+        else { showDetails(id == :profile); }
     }
 
     function showDetails(profile as Boolean) as Void {
@@ -188,46 +198,46 @@ class MomoCalendarView extends MomoLegacyCalendarView {
 
     function onUpdate(dc as Graphics.Dc) as Void {
         if (!_active) { MomoLegacyCalendarView.onUpdate(dc); return; }
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK); dc.clear();
-        dc.drawText(130, 23, Graphics.FONT_SMALL, "Momo suggests", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(_mode.equals("demo") ? 0xFFFF55 : 0x55FFAA, Graphics.COLOR_BLACK);
+        MomoUi.clear(dc); MomoUi.heading(dc, "A little escape");
         var badge = _source.equals("grok") ? "GROK" : "SCRIPTED";
         badge += _mode.equals("demo") ? " / DEMO" : " / CALENDAR";
-        dc.drawText(130, 54, Graphics.FONT_XTINY, badge, Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        MomoUi.text(dc, badge, 58, MomoUi.MINT);
         var hint = "START: refresh";
         if (_stage == :ready && _idea != null) {
             if (_page == 0) {
-                MomoActivityText.draw(dc, _idea["title"] as String, 83, 1);
-                dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
-                MomoActivityText.draw(dc, _idea["label"] as String, 105, 1);
-                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+                MomoUi.text(dc, _idea["title"] as String, 89, MomoUi.INK);
+                MomoUi.text(dc, _idea["label"] as String, 111, MomoUi.MUTED);
                 var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
-                MomoActivityText.draw(dc, quip, 130, 4);
+                MomoUi.paragraph(dc, quip, 131, 4, MomoUi.INK);
             } else if (_page == 1) {
-                var reason = _idea["reason"] instanceof String ? _idea["reason"] as String : "This activity fits your free time and preferences.";
-                MomoActivityText.draw(dc, reason, 94, 4);
+                MomoUi.text(dc, "WHY THIS BREAK?", 91, MomoUi.MINT);
+                var reason = _idea["reason"] instanceof String ? _idea["reason"] as String : "This fits your free time and preferences.";
+                MomoUi.paragraph(dc, reason, 123, 4, MomoUi.INK);
             } else {
-                MomoActivityText.draw(dc, "Open Momo setup on your computer. Your goals and preferences will shape future ideas.", 94, 5);
+                MomoUi.text(dc, "MAKE IT YOURS", 91, MomoUi.MINT);
+                MomoUi.paragraph(dc, "Using default preferences. Choose Setup to tell Momo what works for you.", 123, 4, MomoUi.INK);
             }
             hint = "START: choices";
+            dc.setColor(MomoUi.EDGE, MomoUi.BG);
+            dc.fillCircle(237, 125 + _page * 7, 2);
         } else if (_stage == :saved && _session != null) {
-            MomoActivityText.draw(dc, _mode.equals("demo") ? "Demo break saved." : "Your break is booked.", 92, 2);
-            var label = _session["label"] instanceof String ? _session["label"] as String : "Your planned break";
-            MomoActivityText.draw(dc, label, 139, 2);
-            hint = "START: begin / resume";
+            MomoUi.text(dc, _mode.equals("demo") ? "DEMO BREAK SAVED" : "YOUR BREAK IS BOOKED", 91, MomoUi.MINT);
+            MomoUi.paragraph(dc, _session["title"] as String, 122, 2, MomoUi.INK);
+            var label = _session["label"] instanceof String ? _session["label"] as String : "When you're ready";
+            MomoUi.paragraph(dc, label, 169, 2, MomoUi.MUTED);
+            hint = "START: your break";
         } else if (_stage == :unconfigured) {
-            MomoActivityText.draw(dc, "Start Momo's service on your computer, then rebuild the watch app.", 94, 4);
+            MomoUi.paragraph(dc, "Momo is offline. Connect the service and try again.", 103, 4, MomoUi.INK);
         } else if (_stage == :unpaired) {
-            MomoActivityText.draw(dc, "Connect your calendar on your computer, then pair the watch.", 94, 4);
+            MomoUi.paragraph(dc, "Connect your calendar, then pair your watch.", 103, 4, MomoUi.INK);
         } else {
-            MomoActivityText.draw(dc, _message, 94, 4);
+            MomoUi.paragraph(dc, _message, 103, 4, MomoUi.INK);
             if (_stage == :loading) { hint = "One moment..."; }
-            else if (_pendingAccept != null) { hint = "START: retry safely"; }
+            else if (_pendingAccept != null) { hint = "START: retry"; }
         }
-        dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
-        dc.drawText(130, 216, Graphics.FONT_XTINY, hint, Graphics.TEXT_JUSTIFY_CENTER);
+        MomoUi.pill(dc, hint, 215);
     }
+
 }
 
 class MomoCalendarDelegate extends WatchUi.BehaviorDelegate {

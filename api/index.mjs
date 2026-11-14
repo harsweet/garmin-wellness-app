@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto';
-import { DemoCalendar } from '../backend/demo-calendar.mjs';
-import { WellnessService } from '../backend/wellness-service.mjs';
-import { OnboardingService } from '../backend/onboarding.mjs';
+import { MomoWorkspace } from '../backend/workspace.mjs';
 import { GrokSuggestions } from '../backend/grok.mjs';
 import { RedisStateStore } from '../backend/redis-store.mjs';
-import { createDemoServer } from '../backend/server.mjs';
 
 function failure(response, message, code = 503) {
   if (response.writableEnded) return;
@@ -33,16 +30,10 @@ export function createVercelHandler({ env = process.env, store: injectedStore, p
       const store = injectedStore || new RedisStateStore({ url: env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL, token: env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN, key: `momo:${namespace}:state` });
       await store.withLock(async lease => {
         const saved = await lease.load();
-        const calendar = new DemoCalendar({ timeZone: env.MOMO_TIME_ZONE || 'America/Edmonton', initialState: saved });
-        calendar.persist = async (activities = calendar.activities, wellness = calendar.wellnessState) => {
-          await lease.save({ ...calendar.snapshot(), activities, wellness });
-        };
-        if (!saved) await lease.save(calendar.snapshot());
         const provider = injectedProvider || new GrokSuggestions({ apiKey: env.XAI_API_KEY || env.GROK_API_KEY || '', model: env.XAI_MODEL || 'grok-4.7' });
-        const wellness = new WellnessService(calendar, { suggestionProvider: provider });
-        const onboarding = new OnboardingService(calendar, { publicOrigin });
-        const server = createDemoServer(calendar, { wellness, onboarding, publicOrigin, deviceToken: token, allowLocalSetup: false });
-        await server.listeners('request')[0](request, response);
+        const workspace = new MomoWorkspace({ initialState: saved, deviceToken: token, adminToken: env.MOMO_ADMIN_TOKEN || '', publicOrigin, provider, allowLocalSetup: false, timeZone: env.MOMO_TIME_ZONE || 'America/Edmonton', save: state => lease.save(state) });
+        await workspace.initialize();
+        await workspace.handle(request, response);
       });
     } catch {
       failure(response, 'Momo needs its storage or deployment settings checked. Please try again shortly.');

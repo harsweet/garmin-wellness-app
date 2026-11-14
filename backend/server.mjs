@@ -7,12 +7,12 @@ import { DemoCalendar, CalendarError } from './demo-calendar.mjs';
 import { WellnessService } from './wellness-service.mjs';
 import { OnboardingService, ONBOARDING_COOKIE } from './onboarding.mjs';
 
-function json(response, data, status = 200) {
+export function json(response, data, status = 200) {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   response.end(JSON.stringify(data));
 }
 
-async function readBody(request) {
+export async function readBody(request) {
   // Vercel's Node helpers may have parsed the body before this handler runs.
   if (request.body !== undefined) {
     let parsed = request.body;
@@ -33,13 +33,13 @@ async function readBody(request) {
   try { return JSON.parse(body); } catch { throw new CalendarError(400, 'invalid_json', 'Invalid request.'); }
 }
 
-function tokenMatches(value, expected) {
+export function tokenMatches(value, expected) {
   if (typeof value !== 'string' || typeof expected !== 'string') return false;
   const a = Buffer.from(value), b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function isLocalBrowser(request) {
+export function isLocalBrowser(request) {
   const address = request.socket.remoteAddress;
   return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address) && !['cf-connecting-ip', 'x-forwarded-for', 'forwarded', 'x-forwarded-host'].some(header => request.headers[header] !== undefined);
 }
@@ -47,6 +47,7 @@ function isLocalBrowser(request) {
 const STATIC_FILES = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/onboard': ['index.html', 'text/html; charset=utf-8'],
+  '/setup': ['index.html', 'text/html; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/momo.jpg': ['momo.jpg', 'image/jpeg']
@@ -79,7 +80,7 @@ export function createDemoServer(calendar = new DemoCalendar(), { wellness = new
       if (request.method === 'POST' && pathname === '/api/onboarding/claim') {
         if (!origin || !allowedOrigin(origin) || request.headers['x-momo-request'] !== '1') return json(response, { error: 'invalid_origin' }, 403);
         const body = await readBody(request);
-        const claimed = await onboarding.claim(body?.key);
+        const claimed = await onboarding.claimSetup(body);
         const secure = origin.startsWith('https:') ? '; Secure' : '';
         response.setHeader('Set-Cookie', `${ONBOARDING_COOKIE}=${claimed.sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`);
         return json(response, { status: 'claimed', profileConfigured: claimed.profileConfigured, expiresAt: new Date(claimed.expiresAt).toISOString() });

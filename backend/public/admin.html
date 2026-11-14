@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>Momo · Watch room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/admin.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar"><a class="wordmark" href="/">momo<span>.</span></a><span class="room-label">The watch room</span><span class="demo-badge">Demo calendar</span></header>
+      <main>
+        <section class="pairing-guide" aria-labelledby="pairing-title">
+          <div class="guide-copy">
+            <p class="small-note">A watch. A phone. A little hello.</p>
+            <h1 id="pairing-title">How to register<br>a watch.</h1>
+            <ol class="pairing-steps">
+              <li><div><h2>Open Momo</h2><p>It always starts on setup, with a QR and a four-digit code.</p></div></li>
+              <li><div><h2>Bring your phone</h2><p>Scan the QR, or open <a href="/setup" id="phone-setup-url">the setup page</a> and type the four-digit code.</p></div></li>
+              <li><div><h2>Save goals on the phone</h2><p>The watch notices by itself. Its goals and live activity appear below.</p></div></li>
+            </ol>
+            <p class="guide-footnote">Already paired? Open Setup from the watch menu to edit that device’s goals.</p>
+          </div>
+          <figure class="studio-photo"><img src="/momo.jpg" alt="Momo, a cocoa plush monkey in an indigo studio" width="1152" height="1728"><figcaption>Your very small break companion.</figcaption></figure>
+        </section>
+
+        <section class="setup-banner" id="new-setup" hidden aria-labelledby="new-setup-title" tabindex="-1">
+          <div class="setup-heading"><div><p class="small-note" id="setup-pairing-state">Waiting for a phone</p><h2 id="new-setup-title">Meet your next watch.</h2></div><button class="button quiet" id="close-setup" type="button">Close</button></div>
+          <p class="setup-watch-note" id="setup-instruction">Open Momo on the watch. The QR and four-digit code are there. Scan the QR, or type that code on the phone setup page.</p>
+          <div class="setup-footer"><button class="button cocoa" id="setup-assign-watch" type="button">Show on this simulator</button></div>
+        </section>
+
+        <p class="status" id="status" role="status" aria-live="polite">Connecting to the watch room…</p>
+        <section class="login" id="login" hidden><h2>Come on in.</h2><p>Enter your admin access key to see paired watches and their feedback.</p><form id="login-form"><label for="admin-key">Admin access key</label><input id="admin-key" type="password" autocomplete="off" required maxlength="128"><button class="button primary" type="submit" id="login-button">Open watch room</button></form></section>
+
+        <section id="workspace" hidden aria-labelledby="roster-title">
+          <div class="roster-heading"><div><h2 id="roster-title">Watches & little wins<span>.</span></h2><p id="roster-summary">Your devices will appear here.</p></div><div class="intro-actions" id="admin-actions" hidden><button class="button primary" id="new-user" type="button">+ Pair another watch</button><button class="button quiet" id="refresh" type="button">Refresh</button><button class="button quiet" id="logout" type="button">Sign out</button></div></div>
+          <div class="roster-toolbar"><label for="search">Find a watch</label><input id="search" type="search" placeholder="Search goals, context, or device…"><span id="last-updated">Refreshes every 10 seconds</span></div>
+          <div id="user-list" class="device-roster" role="list" aria-label="Device roster"></div>
+
+          <section class="detail" id="user-detail" aria-labelledby="wearer-title" hidden>
+            <div class="section-heading"><div><p class="small-note" id="wearer-id"></p><h2 id="wearer-title"></h2></div><span class="badge" id="wearer-state"></span></div>
+            <div class="profile-footer"><span id="wearer-updated"></span><button class="button quiet" id="assign-watch" type="button">Show on this simulator</button></div>
+            <div class="section-heading"><h3>What feels good?</h3><p class="small-note">Explicit feedback, by activity</p></div>
+            <div class="table-scroll"><table><thead><tr><th>Activity</th><th>Accepted</th><th>Completed</th><th>Helpful</th><th>Somewhat</th><th>Not helpful</th><th>Snoozed</th></tr></thead><tbody id="preference-rows"></tbody></table></div>
+            <details class="history"><summary>Activity & feedback <span id="history-count"></span></summary><ol id="history-list"></ol></details>
+          </section>
+          <p class="data-note">Separate goals and activity history for every device. Demo calendar bookings and simulated completions are labeled in the activity log.</p>
+        </section>
+      </main>
+      <footer><span>Small breaks. Excellent monkey business.</span><span>momo · watch room</span></footer>
+    </div>
+  </body>
+</html>

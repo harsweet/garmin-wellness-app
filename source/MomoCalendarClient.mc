@@ -86,6 +86,10 @@ class MomoCalendarClient {
         request("onboarding", {}, callback, true);
     }
 
+    function onboardingFresh(callback as Method) as Void {
+        request("onboarding", {"fresh" => true}, callback, true);
+    }
+
     function decide(suggestionId as String, decision as String, callback as Method) as Void {
         request("decide", {"suggestionId" => suggestionId, "decision" => decision}, callback, true);
     }

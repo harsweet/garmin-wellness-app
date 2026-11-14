@@ -13,7 +13,7 @@ function momoNavigationAndQuips(logger as Test.Logger) as Boolean {
     Test.assertEqual(model.getPhase(), 0);
     var first = model.getRemark();
     for (var i = 0; i < 4; i += 1) {
-        delegate.onSelect();
+        delegate.nextRemark();
     }
     Test.assertEqual(model.getRemark(), first);
     delegate.onPreviousPage();

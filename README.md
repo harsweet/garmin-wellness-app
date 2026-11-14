@@ -29,27 +29,35 @@ Garmin requires HTTPS, so the local command starts a temporary Cloudflare Tunnel
 
 ## Try the full experience
 
-1. Momo starts with a QR code. Scan it with your phone, or use the local setup page at http://127.0.0.1:8787.
-2. Choose your goals and optionally add context about your routine, preferences, or what gets in the way. No name or account details are required. New profiles use the phone's time zone automatically.
-3. Save the profile. While the QR screen is visible, the watch checks every ten seconds and returns to Momo when setup is complete. START checks immediately; BACK skips for now.
-4. **Hold UP** on Momo for a personalized activity. UP/DOWN switches detail pages; START offers **Let's go**, **Later**, or **Something else**.
+1. Momo always starts on setup: a QR on the first page, a four-digit code and setup URL on the next.
+2. Scan the QR, or open `/setup` and type the four-digit code. Choose your goals and optionally add context. No name or account details are required. New profiles use the phone's time zone automatically.
+3. Save on the phone. The watch checks every three seconds and continues once this pairing is saved. Reopen **Setup** from the watch's hold-UP menu to edit the same device; launching the app again after a completed pairing registers a new device.
+4. Press **START** on Momo for a personalized activity. UP/DOWN switches detail pages; START offers **Let's go**, **Later**, or **Something else** in a compact action picker. Hold UP opens the home menu, including **Setup**.
 5. Accepting requires confirmation before adding a demo calendar event. Later snoozes suggestions for thirty minutes. Alternatives avoid repeating the activity where possible.
 6. Start the accepted activity. The watch tracks foreground time and observed daily-step deltas. Hold UP during a demo activity for **Simulate finish**, or explicitly self-report completion.
 7. Answer whether it helped. Acceptance, completion, snooze, and helpfulness counts influence future activity ranking.
 
 Walking, gentle stretching, breathing, and quiet rest are supported. Goals, saved context (up to 1,000 characters), activity history, and calendar availability inform Grok's choice and short, humorous line. Profile constraints determine eligible activities; Grok cannot invent arbitrary activities or book anything without acceptance. Updating goals or context invalidates old suggestions. Meeting titles are excluded from the model prompt. Recommendations are cached and provider requests throttled. Existing profiles keep their prior activity and accessibility preferences when using the simplified form.
 
-Phone QR links are one-time, expire after ten minutes, and grant a scoped browser session. That session can edit the profile and read private demo data, but cannot invoke paid AI calls or impersonate the watch. Goals, context, feedback, and demo bookings persist on the backend across restarts; relevant profile details and aggregate feedback are included in Grok requests.
+Phone QR links and four-digit codes are one-time, expire after ten minutes, and grant a browser session scoped to one wearer. Using either invalidates the other. Short-code attempts are rate limited; only hashes are stored. That session can edit its own profile and read private demo data, but cannot invoke paid AI calls or impersonate the watch. Goals, context, feedback, and demo bookings persist on the backend across restarts; relevant profile details and aggregate feedback are included in Grok requests.
+
+## Admin and separate watches
+
+Open **http://127.0.0.1:8787/admin** on the development computer. The page leads with how to register a watch. Local access opens the watch room directly; public/tunnel access requires the key in `.local/admin-token` (or `MOMO_ADMIN_TOKEN`). Admin sessions use an HttpOnly cookie; phone setup sessions do not grant admin access.
+
+Each paired watch is its own row: goals, saved context, completions, accepts, snoozes, and helpful / not-helpful ratings. Completing setup on the phone is what identifies the device — codes are one-time, and the phone cannot save goals until it claims a QR or four-digit code. **Pair another watch** mints a new device with its own QR/code; **Show on this simulator** points the current watch connection at that device. Launching Momo after a watch is already paired mints a new device automatically.
+
+Local data is stored in gitignored `.local/workspace.json`; the previous single-user `.local/demo-calendar.json` is migrated automatically on first launch. Existing profile context and activity history are preserved.
 
 The three home-screen moods and their day remarks remain selectable demo states. Activity tracking pauses when its screen is hidden; this version does not provide background tracking, sleep analysis, or verified health outcomes. Simulator completion evidence is labeled simulated. Suggestions are requested in the app; all-day background notifications are not implemented.
 
 ## Deploy to Vercel
 
-Use **one Vercel project + Upstash Redis**. The function serves the phone UI and watch API; Redis persists profiles, QR sessions, suggestions, demo meetings, bookings, and feedback across cold starts. This prototype has one watch/profile per deployment.
+Use **one Vercel project + Upstash Redis**. The function serves the phone UI, admin, and watch API; Redis persists the workspace and separate wearer profiles, QR/code sessions, suggestions, demo meetings, bookings, and feedback across cold starts.
 
 1. Import this GitHub repository into Vercel. Select **Other** as the framework preset and the repository root as the root directory. `vercel.json` routes requests to `api/index.mjs`.
 2. Add **Upstash Redis** through the project's Storage/Marketplace integration and connect it to the project. The adapter accepts `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`, or legacy `KV_REST_API_URL` / `KV_REST_API_TOKEN` names.
-3. Add `XAI_API_KEY`, optional `XAI_MODEL`, and `MOMO_DEVICE_TOKEN` to Vercel's server environment. For the device token, use the value generated in your local `.local/demo-device-token` so it matches your watch build. The Grok key must never go in watch resources.
+3. Add `XAI_API_KEY`, optional `XAI_MODEL`, `MOMO_DEVICE_TOKEN`, and `MOMO_ADMIN_TOKEN` to Vercel's server environment. Use the local `.local/demo-device-token` and `.local/admin-token` values for the matching watch and admin. The Grok and admin keys must never go in watch resources.
 4. Set `MOMO_PUBLIC_URL` to the stable production HTTPS URL, then redeploy. Otherwise the adapter uses Vercel's system production URL. Use the public production deployment; Vercel login protection must allow the watch's API requests. Momo authenticates its own requests.
 5. Configure that deployment URL locally and rebuild:
 

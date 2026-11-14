@@ -9,6 +9,7 @@ class MomoApp extends Application.AppBase {
 
     function getInitialView() as [WatchUi.Views] or [WatchUi.Views, WatchUi.InputDelegates] {
         var view = new MomoOnboardingView();
+        view.setFresh(true);
         return [view, new MomoOnboardingDelegate(view)];
     }
 }

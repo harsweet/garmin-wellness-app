@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>Meet Momo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
   </head>
@@ -14,14 +17,20 @@
 
       <header class="intro">
         <div class="mascot"><img src="/momo.jpg" alt="Momo, your monkey sidekick" width="1152" height="1728"></div>
-        <p class="eyebrow">A LITTLE ROOM FOR YOU</p>
-        <h1>Your goals.<br>Momo's <em>next move.</em></h1>
-        <p>Choose what you want to work on.<br>Add a little context. Momo takes it from there.</p>
+        <p class="kicker">From the watch on your wrist</p>
+        <h1>Tell Momo what you need.</h1>
+        <p>Scan the QR on the watch, or type the four-digit code. Then pick your goals and send Momo back to work.</p>
       </header>
 
       <section class="notice" id="access-notice" role="status" aria-live="polite">
         <h2 id="access-title">Connecting to Momo…</h2>
         <p id="access-message">Getting your setup ready.</p>
+        <form class="setup-code-form" id="setup-code-form" aria-describedby="setup-code-status" hidden>
+          <label for="setup-code">Four-digit code on Momo</label>
+          <input id="setup-code" name="code" type="text" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="one-time-code" placeholder="0000" spellcheck="false" required>
+          <button class="primary-button" id="connect-code" type="submit">Connect this watch</button>
+          <p class="code-status" id="setup-code-status" role="status" aria-live="polite">Or scan the QR on the watch instead.</p>
+        </form>
       </section>
 
       <div class="connection-banner" id="connection-banner" role="status" hidden>
@@ -31,8 +40,8 @@
 
       <section class="setup-complete" id="setup-complete" role="status" tabindex="-1" hidden>
         <span class="complete-symbol" aria-hidden="true">✓</span>
-        <h2>You're all set.</h2>
-        <p>Head back to Momo on your watch.<br>Your goals and notes are saved.</p>
+        <h2>You're paired.</h2>
+        <p>Look back at Momo. The watch notices on its own, and this device shows up in the watch room.</p>
         <button class="text-button" id="edit-profile" type="button">Edit my goals</button>
       </section>
 

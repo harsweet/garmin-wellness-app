@@ -111,11 +111,11 @@ class MomoActivityView extends WatchUi.View {
         } else if (_state == :running) {
             openOptions();
         } else if (_state == :feedback) {
-            var menu = new WatchUi.Menu2({:title => "Did it help?"});
-            menu.addItem(new WatchUi.MenuItem("Yes", null, :yes, null));
-            menu.addItem(new WatchUi.MenuItem("Somewhat", null, :somewhat, null));
-            menu.addItem(new WatchUi.MenuItem("No", null, :no, null));
-            WatchUi.pushView(menu, new MomoActivityFeedbackDelegate(self), WatchUi.SLIDE_LEFT);
+            var feedback = new MomoChoiceView("Did it help?", [
+                {"id" => :yes, "label" => "Yes", "detail" => "More of this, please"},
+                {"id" => :somewhat, "label" => "Somewhat", "detail" => "A little better"},
+                {"id" => :no, "label" => "No", "detail" => "Let's try something else"}], method(:onFeedbackChoice));
+            WatchUi.pushView(feedback, new MomoChoiceDelegate(feedback), WatchUi.SLIDE_LEFT);
         } else if (_state == :error) {
             if (_pendingAction.equals("complete")) { sendCompletion(); }
             else if (_pendingAction.equals("feedback")) { sendFeedback(_pendingHelpful); }
@@ -128,13 +128,20 @@ class MomoActivityView extends WatchUi.View {
 
     function openOptions() as Void {
         if (_state != :running) { return; }
-        var menu = new WatchUi.Menu2({:title => "Your break"});
-        menu.addItem(new WatchUi.MenuItem("I'm done", _tracker.goalMet() ? "Goal reached" : "Mark it yourself", :finish, null));
-        if (_mode.equals("demo")) {
-            menu.addItem(new WatchUi.MenuItem("Simulate finish", "Demo data only", :simulate, null));
-        }
-        menu.addItem(new WatchUi.MenuItem("Keep going", null, :continue, null));
-        WatchUi.pushView(menu, new MomoActivityOptionsDelegate(self), WatchUi.SLIDE_LEFT);
+        var items = [{"id" => :finish, "label" => "I'm done", "detail" => _tracker.goalMet() ? "Goal reached" : "Mark it yourself"}] as Array<Dictionary>;
+        if (_mode.equals("demo")) { items.add({"id" => :simulate, "label" => "Simulate finish", "detail" => "Demo data only"}); }
+        items.add({"id" => :continue, "label" => "Keep going", "detail" => "Back to your break"});
+        var choices = new MomoChoiceView("Your break", items, method(:onActivityChoice));
+        WatchUi.pushView(choices, new MomoChoiceDelegate(choices), WatchUi.SLIDE_LEFT);
+    }
+
+    function onActivityChoice(id as Symbol) as Void {
+        if (id == :simulate) { finishActivity(true); }
+        else if (id == :finish) { requestFinish(); }
+    }
+
+    function onFeedbackChoice(id as Symbol) as Void {
+        sendFeedback(id == :yes ? "yes" : (id == :somewhat ? "somewhat" : "no"));
     }
 
     function requestFinish() as Void {
@@ -213,47 +220,52 @@ class MomoActivityView extends WatchUi.View {
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK); dc.clear();
-        dc.drawText(130, 23, Graphics.FONT_SMALL, "Your little escape", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(_mode.equals("demo") ? 0xFFFF55 : 0x55FFAA, Graphics.COLOR_BLACK);
-        dc.drawText(130, 54, Graphics.FONT_XTINY, _mode.equals("demo") ? "SIMULATED SESSION" : "ACTIVITY SESSION", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        MomoUi.clear(dc); MomoUi.heading(dc, "Your break");
+        MomoUi.text(dc, _mode.equals("demo") ? "SIMULATED / DEMO" : "ACTIVITY SESSION", 58, MomoUi.MINT);
         var hint = "START: options";
-        var title = _activity["title"] instanceof String ? _activity["title"] as String : "Your break";
+        var title = _activity["title"] instanceof String ? _activity["title"] as String : "A little space for you";
         if (_state == :scheduled) {
-            MomoActivityText.draw(dc, title, 92, 2);
-            dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
+            MomoUi.paragraph(dc, title, 96, 2, MomoUi.INK);
             var label = _activity["label"] instanceof String ? _activity["label"] as String : "When you're ready";
-            MomoActivityText.draw(dc, "Planned: " + label, 139, 2);
-            hint = "START: begin when ready";
+            MomoUi.paragraph(dc, label, 153, 2, MomoUi.MUTED);
+            hint = "START: begin";
         } else if (_state == :running) {
-            MomoActivityText.draw(dc, title, 84, 1);
+            MomoUi.text(dc, title, 90, MomoUi.INK);
             var remaining = _tracker.durationSeconds() - _tracker.elapsedSeconds();
             if (remaining < 0) { remaining = 0; }
             var seconds = remaining % 60;
             var clock = (remaining / 60).toNumber() + ":" + (seconds < 10 ? "0" : "") + seconds;
-            dc.drawText(130, 112, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
-            var detail = _tracker.tracking().equals("steps") ? _tracker.steps() + " / " + _tracker.targetSteps() + " steps" : "A little space for yourself.";
-            dc.drawText(130, 164, Graphics.FONT_XTINY, detail, Graphics.TEXT_JUSTIFY_CENTER);
-            if (_tracker.goalMet()) { dc.drawText(130, 187, Graphics.FONT_XTINY, "Goal reached. Nice work.", Graphics.TEXT_JUSTIFY_CENTER); }
+            dc.setColor(MomoUi.INK, MomoUi.BG);
+            dc.drawText(130, 115, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+            var detail = _tracker.tracking().equals("steps") ? _tracker.steps() + " / " + _tracker.targetSteps() + " steps" : "Breathe. You've got time.";
+            MomoUi.text(dc, detail, 170, MomoUi.MUTED);
+            var progress = _tracker.elapsedSeconds().toFloat() / _tracker.durationSeconds();
+            if (_tracker.tracking().equals("steps") && _tracker.targetSteps() > 0) {
+                var stepProgress = _tracker.steps().toFloat() / _tracker.targetSteps();
+                if (stepProgress < progress) { progress = stepProgress; }
+            }
+            if (progress > 1) { progress = 1; }
+            dc.setColor(MomoUi.EDGE, MomoUi.BG); dc.fillRoundedRectangle(52, 197, 156, 4, 2);
+            if (progress > 0) { dc.setColor(MomoUi.MINT, MomoUi.BG); dc.fillRoundedRectangle(52, 197, (156 * progress).toNumber(), 4, 2); }
+            if (_tracker.goalMet()) { hint = "START: finish"; }
         } else if (_state == :feedback) {
-            MomoActivityText.draw(dc, "You made room for yourself. Tiny high-five!", 94, 3);
-            dc.drawText(130, 170, Graphics.FONT_XTINY, "Did that help?", Graphics.TEXT_JUSTIFY_CENTER);
+            MomoUi.text(dc, "TINY HIGH-FIVE!", 94, MomoUi.MINT);
+            MomoUi.paragraph(dc, "You made room for yourself. How did that feel?", 128, 3, MomoUi.INK);
             hint = "START: tell Momo";
         } else if (_state == :done) {
-            MomoActivityText.draw(dc, _message, 98, 4);
-            hint = "START: back to Momo";
+            MomoUi.text(dc, "NOTED, HUMAN.", 94, MomoUi.MINT);
+            MomoUi.paragraph(dc, _message, 128, 3, MomoUi.INK);
+            hint = "START: back";
         } else if (_state == :saving) {
-            MomoActivityText.draw(dc, "One moment. Filing your tiny adventure...", 104, 3);
+            MomoUi.paragraph(dc, "Filing your tiny adventure...", 109, 3, MomoUi.INK);
             hint = "Saving...";
         } else {
-            MomoActivityText.draw(dc, _message, 94, 4);
-            hint = "START: retry safely";
+            MomoUi.paragraph(dc, _message, 103, 4, MomoUi.INK);
+            hint = "START: retry";
         }
-        dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
-        dc.drawText(130, 216, Graphics.FONT_XTINY, hint, Graphics.TEXT_JUSTIFY_CENTER);
+        MomoUi.pill(dc, hint, 215);
     }
+
 }
 
 class MomoActivityDelegate extends WatchUi.BehaviorDelegate {
