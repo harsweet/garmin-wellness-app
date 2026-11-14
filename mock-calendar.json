@@ -1,0 +1,10 @@
+{
+  "scheduleName": "Regular week",
+  "description": "Baked mock calendar data for Momo. The Connect IQ runtime has no JSON parser, so this schedule is mirrored as a Monkey C dictionary literal in source/MomoMockCalendar.mc (loadSchedule). Keep the two in sync. days use Connect IQ day_of_week: 0 = Sunday ... 6 = Saturday.",
+  "events": [
+    { "label": "Gym", "days": [1, 2, 3, 4, 5], "start": "07:00", "end": "08:00" },
+    { "label": "Work 9-5", "days": [1, 2, 3, 4, 5], "start": "09:00", "end": "17:00" },
+    { "label": "Doctor appointment", "days": [6], "start": "10:00", "end": "15:00" },
+    { "label": "Travel", "days": [0], "start": "13:00", "end": "16:00" }
+  ]
+}

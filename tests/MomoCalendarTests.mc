@@ -50,7 +50,10 @@ function momoCalendarSlotsAndStates(logger as Test.Logger) as Boolean {
     view.handleAvailability(503, null);
     Test.assertEqual(view.getState(), :not_connected);
     view.handleAvailability(-2, null);
-    Test.assertEqual(view.getState(), :error);
+    // Offline no longer dead-ends in :error: it falls back to the schedule
+    // baked into the app (mock mode), which is ready unless fully busy.
+    var offlineState = view.getState();
+    Test.assert(offlineState == :ready || offlineState == :empty);
     view.handleCreated(409, null);
     Test.assertEqual(view.getState(), :error);
     view.handleCreated(200, {"status" => "already_created", "mode" => "google", "label" => "Today 12:30 PM"});

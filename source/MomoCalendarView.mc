@@ -13,17 +13,30 @@ class MomoLegacyCalendarView extends WatchUi.View {
     private var _message as String = "";
     private var _savedLabel as String = "";
     private var _pendingSlot as String or Null = null;
+    private var _mock as MomoMockCalendar or Null = null;
+    private var _usedMock as Boolean = false;
 
     function initialize() {
         View.initialize();
         _client = new MomoCalendarClient();
     }
 
+    private function getMock() as MomoMockCalendar {
+        if (_mock == null) {
+            _mock = new MomoMockCalendar();
+        }
+        return _mock as MomoMockCalendar;
+    }
+
     function onShow() as Void {
-        _mode = _client.isDemoServer() ? "demo" : _client.getMode();
         if (!_client.hasServer()) {
-            _state = :unconfigured;
-        } else if (!_loaded && _client.hasToken()) {
+            // No calendar server configured: use the schedule baked into the app.
+            _mode = "mock";
+            refresh();
+            return;
+        }
+        _mode = _client.isDemoServer() ? "demo" : _client.getMode();
+        if (!_loaded && _client.hasToken()) {
             refresh();
         }
     }
@@ -47,9 +60,15 @@ class MomoLegacyCalendarView extends WatchUi.View {
     function refresh() as Void {
         _loaded = true;
         _pendingSlot = null;
+        _usedMock = false;
         if (!_client.hasServer()) {
-            _state = :unconfigured;
+            // No server: load the baked mock schedule immediately.
+            _usedMock = true;
+            _mode = "mock";
+            _state = :loading;
+            _message = "Reading the baked schedule...";
             WatchUi.requestUpdate();
+            handleAvailability(200, getMock().availability());
             return;
         } else if (!_client.hasToken()) {
             _state = :unpaired;
@@ -86,6 +105,8 @@ class MomoLegacyCalendarView extends WatchUi.View {
                 var question = "Add an 8-minute walk?\n" + label;
                 if (_mode.equals("demo")) {
                     question = "Save a DEMO walk?\n" + label;
+                } else if (_mode.equals("mock")) {
+                    question = "Save a MOCK walk?\n" + label;
                 }
                 WatchUi.pushView(new WatchUi.Confirmation(question), new MomoLegacyCalendarConfirmationDelegate(self), WatchUi.SLIDE_LEFT);
             }
@@ -109,6 +130,18 @@ class MomoLegacyCalendarView extends WatchUi.View {
         _state = :loading;
         _message = "Saving your little escape...";
         WatchUi.requestUpdate();
+        if (_mode.equals("mock")) {
+            var mockLabel = "8-minute walk";
+            for (var i = 0; i < _slots.size(); i += 1) {
+                var entry = _slots[i];
+                if (entry instanceof Dictionary && entry["label"] instanceof String &&
+                    (entry["id"] as String).equals(_pendingSlot)) {
+                    mockLabel = entry["label"] as String;
+                }
+            }
+            getMock().createActivity(_pendingSlot, mockLabel, method(:handleCreated));
+            return;
+        }
         _client.createActivity(_pendingSlot, method(:handleCreated));
     }
 
@@ -137,6 +170,17 @@ class MomoLegacyCalendarView extends WatchUi.View {
                 _message = "Calendar reply was incomplete.";
             }
         } else {
+            if (!_usedMock && code < 0) {
+                // Network-level failure with a configured server: fall back to
+                // the baked mock schedule instead of showing a dead end.
+                _usedMock = true;
+                _mode = "mock";
+                _state = :loading;
+                _message = "Calendar offline. Using the baked schedule...";
+                WatchUi.requestUpdate();
+                handleAvailability(200, getMock().availability());
+                return;
+            }
             setError(code);
         }
         WatchUi.requestUpdate();
@@ -185,9 +229,9 @@ class MomoLegacyCalendarView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
         dc.drawText(130, 24, Graphics.FONT_SMALL, "Momo Calendar", Graphics.TEXT_JUSTIFY_CENTER);
-        var accent = _mode.equals("demo") ? 0xFFFF55 : 0x55FFAA;
+        var accent = _mode.equals("demo") ? 0xFFFF55 : (_mode.equals("mock") ? 0xAAAAFF : 0x55FFAA);
         dc.setColor(accent, Graphics.COLOR_BLACK);
-        var badge = _mode.equals("demo") ? "DEMO CALENDAR" : (_mode.equals("google") ? "GOOGLE CALENDAR" : "YOUR LITTLE ESCAPE");
+        var badge = _mode.equals("demo") ? "DEMO CALENDAR" : (_mode.equals("mock") ? "MOCK SCHEDULE" : (_mode.equals("google") ? "GOOGLE CALENDAR" : "YOUR LITTLE ESCAPE"));
         dc.drawText(130, 54, Graphics.FONT_XTINY, badge, Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         var hint = "START: refresh";
@@ -221,7 +265,7 @@ class MomoLegacyCalendarView extends WatchUi.View {
         } else if (_state == :empty) {
             drawLines(dc, ["No roomy gaps just yet.", "Keep your plans.", "We'll check again later."], 94);
         } else if (_state == :saved) {
-            dc.drawText(130, 92, Graphics.FONT_SMALL, _mode.equals("demo") ? "Demo walk saved" : "Walk scheduled!", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(130, 92, Graphics.FONT_SMALL, _mode.equals("demo") ? "Demo walk saved" : (_mode.equals("mock") ? "Mock walk saved" : "Walk scheduled!"), Graphics.TEXT_JUSTIFY_CENTER);
             drawWrapped(dc, _savedLabel, 126);
             dc.setColor(accent, Graphics.COLOR_BLACK);
             dc.drawText(130, 169, Graphics.FONT_XTINY, "Chair escape: booked.", Graphics.TEXT_JUSTIFY_CENTER);
