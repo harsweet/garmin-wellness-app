@@ -1,27 +1,28 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Garmin: Build (SDK 9.1.0)",
-            "type": "process",
-            "command": "bash",
-            "args": ["${workspaceFolder}/scripts/ciq.sh", "build"],
-            "group": { "kind": "build", "isDefault": true },
-            "problemMatcher": []
-        },
-        {
-            "label": "Garmin: Run in simulator (SDK 9.1.0)",
-            "type": "process",
-            "command": "bash",
-            "args": ["${workspaceFolder}/scripts/ciq.sh", "run"],
-            "problemMatcher": []
-        },
-        {
-            "label": "Garmin: Test heist missions (SDK 9.1.0)",
-            "type": "process",
-            "command": "bash",
-            "args": ["${workspaceFolder}/scripts/ciq.sh", "test"],
-            "problemMatcher": []
-        }
-    ]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Momo: build",
+      "type": "shell",
+      "command": "./scripts/ciq.sh",
+      "args": ["build"],
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "Momo: run simulator",
+      "type": "shell",
+      "command": "./scripts/ciq.sh",
+      "args": ["run"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Momo: test",
+      "type": "shell",
+      "command": "./scripts/ciq.sh",
+      "args": ["test"],
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
 }

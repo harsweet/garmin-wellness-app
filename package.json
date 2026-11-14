@@ -1,0 +1,11 @@
+{
+  "name": "momo-calendar-demo",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "calendar:demo": "node scripts/calendar-demo.mjs",
+    "calendar:test": "node --test backend/test/*.test.mjs",
+    "calendar:smoke": "node scripts/calendar-smoke.mjs"
+  }
+}

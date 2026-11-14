@@ -1,21 +1,15 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
-    <iq:application id="ae248bbf73174d34a8d8c5c4ef5d739a"
-                    type="watch-app"
-                    name="@Strings.AppName"
-                    entry="WellnessApp"
-                    launcherIcon="@Drawables.LauncherIcon"
-                    minApiLevel="5.2.0">
+    <iq:application id="8ec561a2c052478bb47de99f4e02683d" type="watch-app"
+        name="@Strings.AppName" entry="MomoApp" launcherIcon="@Drawables.LauncherIcon"
+        minSdkVersion="4.0.0" version="0.1.0">
         <iq:products>
-            <iq:product id="fenix7pro" />
+            <iq:product id="fenix7pro"/>
         </iq:products>
         <iq:permissions>
-            <iq:uses-permission id="Sensor" />
-            <iq:uses-permission id="Positioning" />
+            <iq:uses-permission id="Communications"/>
         </iq:permissions>
-        <iq:languages>
-            <iq:language>eng</iq:language>
-        </iq:languages>
-        <iq:barrels />
+        <iq:languages><iq:language>eng</iq:language></iq:languages>
+        <iq:barrels/>
     </iq:application>
 </iq:manifest>

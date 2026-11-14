@@ -1,3 +1,7 @@
 <drawables>
-    <bitmap id="LauncherIcon" filename="launcher_icon.svg" />
+    <!-- Keep the supplied artwork intact; the Garmin resource compiler resizes it. -->
+    <bitmap id="MomoSleepy" filename="../../assets/momo/sleepy.jpg" scaleX="132" scaleY="198" dithering="floyd_steinberg"/>
+    <bitmap id="MomoChill" filename="../../assets/momo/chill.jpg" scaleX="106" scaleY="159" dithering="floyd_steinberg"/>
+    <bitmap id="MomoThriving" filename="../../assets/momo/thriving.jpg" scaleX="106" scaleY="159" dithering="floyd_steinberg"/>
+    <bitmap id="LauncherIcon" filename="launcher.svg"/>
 </drawables>
