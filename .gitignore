@@ -1,0 +1,14 @@
+bin/
+.local/
+*.der
+*.pem
+*.prg
+*.prg.debug.xml
+*.iq
+.DS_Store
+resources-fenix7pro/
+output/
+node_modules/
+.env
+.env.*
+!.env.example

@@ -1,0 +1,5 @@
+<settings>
+    <setting propertyKey="@Properties.CalendarServerUrl" title="@Strings.CalendarServerTitle">
+        <settingConfig type="alphaNumeric" maxLength="256"/>
+    </setting>
+</settings>
