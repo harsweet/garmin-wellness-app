@@ -237,64 +237,101 @@ class MomoCalendarView extends MomoLegacyCalendarView {
         else { _message = data != null && data["message"] instanceof String ? data["message"] as String : "Momo is offline. Is the service running?"; }
     }
 
+    private function drawStatusScreen(dc as Graphics.Dc, eyebrow as String, heading as String, body as String, pillLabel as String, accent as Number, showStartTick as Boolean) as Void {
+        if (showStartTick) { MomoUi.drawStartTick(dc, accent); }
+        MomoUi.text(dc, eyebrow, 18, accent);
+        MomoUi.titleText(dc, heading, 50, MomoUi.INK);
+        MomoUi.drawDivider(dc, 82, 120);
+        MomoUi.paragraph(dc, body, 98, 4, showStartTick ? MomoUi.INK : MomoUi.MUTED);
+        MomoUi.pill(dc, pillLabel, 216);
+    }
+
     function onUpdate(dc as Graphics.Dc) as Void {
         if (!_active) { MomoLegacyCalendarView.onUpdate(dc); return; }
-        MomoUi.clear(dc); MomoUi.heading(dc, "A little escape");
-        var badge = _source.equals("grok") ? "GROK" : "SCRIPTED";
-        badge += _mode.equals("demo") ? " / DEMO" : " / CALENDAR";
-        MomoUi.text(dc, badge, 56, MomoUi.MINT);
-        var hint = "START: refresh";
+        MomoUi.clear(dc);
         if (_stage == :ready && _idea != null) {
+            var kind = _idea["activityId"] instanceof String ? _idea["activityId"] as String : "breathe";
+            var accent = MomoUi.activityAccent(kind);
+            MomoUi.drawStartTick(dc, accent);
+            MomoUi.drawPageRail(dc, _profileConfigured ? 2 : 3, _page, accent);
             if (_page == 0) {
-                var clue = _sensorClue;
-                if (clue.length() == 0 && !_checkInMood.equals("unknown")) {
-                    clue = "MOOD · " + _checkInMood.toUpper();
+                var eyebrow = _sensorClue;
+                var isClue = eyebrow.length() > 0;
+                if (!isClue && !_checkInMood.equals("unknown")) {
+                    eyebrow = "MOOD · " + _checkInMood.toUpper();
+                    isClue = true;
                 }
-                if (clue.length() > 0) {
-                    MomoUi.text(dc, clue, 75, MomoUi.LAVENDER);
-                    MomoUi.text(dc, _idea["title"] as String, 95, MomoUi.INK);
-                    MomoUi.text(dc, _idea["label"] as String, 115, MomoUi.MUTED);
-                    var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
-                    MomoUi.paragraph(dc, quip, 135, 3, MomoUi.INK);
-                } else {
-                    MomoUi.text(dc, _idea["title"] as String, 89, MomoUi.INK);
-                    MomoUi.text(dc, _idea["label"] as String, 111, MomoUi.MUTED);
-                    var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
-                    MomoUi.paragraph(dc, quip, 131, 4, MomoUi.INK);
+                if (!isClue) {
+                    eyebrow = (_source.equals("grok") ? "GROK" : "MOMO") + (_mode.equals("demo") ? " · DEMO" : "");
                 }
+                MomoUi.text(dc, eyebrow, 16, isClue ? MomoUi.LAVENDER : accent);
+                dc.setPenWidth(2);
+                dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+                dc.drawCircle(130, 56, 17);
+                dc.setPenWidth(1);
+                MomoUi.drawIcon(dc, kind, 130, 56, accent);
+                MomoUi.titleText(dc, _idea["title"] as String, 78, MomoUi.INK);
+                MomoUi.text(dc, _idea["label"] as String, 104, MomoUi.MUTED);
+                MomoUi.drawDivider(dc, 125, 148);
+                var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
+                MomoUi.paragraph(dc, quip, 133, 3, MomoUi.INK);
             } else if (_page == 1) {
-                MomoUi.text(dc, "WHY THIS BREAK?", 88, MomoUi.MINT);
+                var whyEyebrow = _source.equals("grok") ? "GROK · WHY THIS" : "WHY THIS BREAK";
+                MomoUi.text(dc, whyEyebrow, 16, accent);
+                MomoUi.titleText(dc, "Why this fits", 40, MomoUi.INK);
                 var reason = _idea["reason"] instanceof String ? _idea["reason"] as String : "This fits your free time and preferences.";
                 var coachLine = _idea["coachLine"] instanceof String ? _idea["coachLine"] as String : "";
                 if (coachLine.length() > 0) {
-                    MomoUi.paragraph(dc, reason, 114, 2, MomoUi.INK);
-                    MomoUi.paragraph(dc, coachLine, 162, 2, MomoUi.GOLD);
+                    MomoUi.paragraph(dc, reason, 72, 3, MomoUi.INK);
+                    MomoUi.drawDivider(dc, 138, 136);
+                    MomoUi.text(dc, "COACH TIP", 145, MomoUi.GOLD);
+                    MomoUi.paragraph(dc, coachLine, 165, 2, MomoUi.GOLD);
                 } else {
-                    MomoUi.paragraph(dc, reason, 121, 4, MomoUi.INK);
+                    MomoUi.paragraph(dc, reason, 72, 5, MomoUi.INK);
                 }
             } else {
-                MomoUi.text(dc, "MAKE IT YOURS", 91, MomoUi.MINT);
-                MomoUi.paragraph(dc, "Using default preferences. Choose Setup to tell Momo what works for you.", 123, 4, MomoUi.INK);
+                MomoUi.text(dc, "SETUP", 16, accent);
+                MomoUi.titleText(dc, "Make it yours", 46, MomoUi.INK);
+                MomoUi.drawDivider(dc, 78, 128);
+                MomoUi.paragraph(dc, "Using default preferences. Choose Setup to tell Momo what works for you.", 92, 4, MomoUi.INK);
             }
-            hint = "START: choices";
-            dc.setColor(MomoUi.EDGE, MomoUi.BG);
-            dc.fillCircle(237, 125 + _page * 7, 2);
+            MomoUi.pill(dc, "choices", 216);
         } else if (_stage == :saved && _session != null) {
-            MomoUi.text(dc, _mode.equals("demo") ? "DEMO BREAK SAVED" : "YOUR BREAK IS BOOKED", 91, MomoUi.MINT);
-            MomoUi.paragraph(dc, _session["title"] as String, 122, 2, MomoUi.INK);
+            var savedKind = _session["activityId"] instanceof String ? _session["activityId"] as String : "breathe";
+            var savedAccent = MomoUi.activityAccent(savedKind);
+            MomoUi.drawStartTick(dc, MomoUi.MINT);
+            MomoUi.text(dc, "BOOKED", 16, MomoUi.MINT);
+            dc.setPenWidth(2);
+            dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+            dc.drawCircle(130, 60, 17);
+            dc.setPenWidth(1);
+            MomoUi.drawIcon(dc, savedKind, 130, 60, savedAccent);
+            MomoUi.titleText(dc, _session["title"] as String, 86, MomoUi.INK);
+            MomoUi.drawDivider(dc, 120, 136);
             var label = _session["label"] instanceof String ? _session["label"] as String : "When you're ready";
-            MomoUi.paragraph(dc, label, 169, 2, MomoUi.MUTED);
-            hint = "START: your break";
+            MomoUi.paragraph(dc, label, 134, 2, MomoUi.MUTED);
+            MomoUi.pill(dc, "your break", 216);
+        } else if (_stage == :loading) {
+            drawStatusScreen(dc, "MOMO", "Just a sec", _message, "wait...", MomoUi.MINT, false);
+        } else if (_stage == :snoozed) {
+            drawStatusScreen(dc, "SNOOZED", "Breathing room", _message, "refresh", MomoUi.LAVENDER, true);
+        } else if (_stage == :empty) {
+            drawStatusScreen(dc, "ALL CLEAR", "No gaps now", _message, "refresh", MomoUi.MINT, true);
         } else if (_stage == :unconfigured) {
-            MomoUi.paragraph(dc, "Momo is offline. Connect the service and try again.", 103, 4, MomoUi.INK);
+            drawStatusScreen(dc, "OFFLINE", "Not connected", "Momo is offline. Connect the service and try again.", "retry", MomoUi.PEACH, true);
         } else if (_stage == :unpaired) {
-            MomoUi.paragraph(dc, "Connect your calendar, then pair your watch.", 103, 4, MomoUi.INK);
+            drawStatusScreen(dc, "PAIRING", "Pair your watch", "Connect your calendar, then pair your watch.", "refresh", MomoUi.PEACH, true);
         } else {
-            MomoUi.paragraph(dc, _message, 103, 4, MomoUi.INK);
-            if (_stage == :loading) { hint = "One moment..."; }
-            else if (_pendingAccept != null) { hint = "START: retry safely"; }
+            drawStatusScreen(
+                dc,
+                _pendingAccept != null ? "CHECK CALENDAR" : "OFFLINE",
+                _pendingAccept != null ? "Save uncertain" : "Connection lost",
+                _message,
+                _pendingAccept != null ? "retry safely" : "retry",
+                MomoUi.CORAL,
+                true
+            );
         }
-        MomoUi.pill(dc, hint, 215);
     }
 
 }

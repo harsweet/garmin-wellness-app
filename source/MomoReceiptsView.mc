@@ -160,54 +160,114 @@ class MomoReceiptsView extends WatchUi.View {
         return id.length() > 0 ? id : "Break";
     }
 
+    private function formatTopCard(value as String) as String {
+        if (value.length() > 12 && value.substring(0, 12).equals("Best break: ")) {
+            return value.substring(12, value.length());
+        }
+        if (value.length() > 10 && value.substring(0, 10).equals("Top pick: ")) {
+            return value.substring(10, value.length());
+        }
+        return value;
+    }
+
     function onUpdate(dc as Graphics.Dc) as Void {
         MomoUi.clear(dc);
-        MomoUi.heading(dc, "What works");
-        MomoUi.text(dc, _mode.equals("demo") ? "DEMO RECEIPTS" : "YOUR BREAK RECEIPTS", 56, MomoUi.MINT);
 
-        var hint = "START: refresh";
-        if (_state == :loading) {
-            MomoUi.paragraph(dc, _message, 108, 3, MomoUi.INK);
-            hint = "One moment...";
-        } else if (_state == :ready) {
+        if (_state == :ready) {
             var totalPages = 1 + _activities.size();
+            MomoUi.drawPageRail(dc, totalPages, _page, MomoUi.MINT);
             if (_page == 0) {
-                var streakLabel = _streakDays == 1 ? "1 day" : _streakDays + " days";
-                MomoUi.text(dc, _totalBreaks + (_totalBreaks == 1 ? " break done" : " breaks done"), 88, MomoUi.INK);
-                MomoUi.text(dc, "Streak: " + streakLabel, 112, MomoUi.GOLD);
-                MomoUi.paragraph(dc, _topSummary, 140, 3, MomoUi.LAVENDER);
-                hint = _activities.size() > 0 ? "UP/DOWN: receipts" : "START: refresh";
+                var eyebrow = _mode.equals("demo") ? "DEMO RECEIPTS" : "RECEIPTS";
+                dc.setColor(MomoUi.MINT, MomoUi.BG);
+                dc.drawText(130, 16, Graphics.FONT_XTINY, MomoUi.fit(dc, eyebrow, Graphics.FONT_XTINY, 114), Graphics.TEXT_JUSTIFY_CENTER);
+                MomoUi.titleText(dc, "What works", 34, MomoUi.INK);
+
+                // Two side-by-side stat tiles
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(82, 66, Graphics.FONT_MEDIUM, _totalBreaks.toString(), Graphics.TEXT_JUSTIFY_CENTER);
+                dc.setColor(MomoUi.MUTED, MomoUi.BG);
+                dc.drawText(82, 100, Graphics.FONT_XTINY, "BREAKS", Graphics.TEXT_JUSTIFY_CENTER);
+
+                dc.setColor(MomoUi.EDGE, MomoUi.BG);
+                dc.drawLine(130, 72, 130, 118);
+
+                dc.setColor(MomoUi.GOLD, MomoUi.BG);
+                dc.drawText(178, 66, Graphics.FONT_MEDIUM, _streakDays.toString() + "d", Graphics.TEXT_JUSTIFY_CENTER);
+                dc.setColor(MomoUi.MUTED, MomoUi.BG);
+                dc.drawText(178, 100, Graphics.FONT_XTINY, "STREAK", Graphics.TEXT_JUSTIFY_CENTER);
+
+                // Highlighted Top Break card
+                dc.setColor(MomoUi.DEEP, MomoUi.BG);
+                dc.fillRoundedRectangle(36, 130, 188, 66, 12);
+                dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+                dc.drawRoundedRectangle(36, 130, 188, 66, 12);
+
+                dc.setColor(MomoUi.GOLD, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(130, 136, Graphics.FONT_XTINY, "TOP BREAK", Graphics.TEXT_JUSTIFY_CENTER);
+
+                var cardLines = MomoUi.lines(dc, formatTopCard(_topSummary), 172);
+                dc.setColor(MomoUi.INK, Graphics.COLOR_TRANSPARENT);
+                var lineCount = cardLines.size() < 2 ? cardLines.size() : 2;
+                for (var i = 0; i < lineCount; i += 1) {
+                    var line = cardLines[i];
+                    if (i == 1 && cardLines.size() > 2) {
+                        while (line.length() > 0 && dc.getTextWidthInPixels(line + "...", Graphics.FONT_XTINY) > 172) {
+                            line = line.substring(0, line.length() - 1);
+                        }
+                        line = line + "...";
+                    } else {
+                        line = MomoUi.fit(dc, line, Graphics.FONT_XTINY, 172);
+                    }
+                    dc.drawText(130, 156 + i * 18, Graphics.FONT_XTINY, line, Graphics.TEXT_JUSTIFY_CENTER);
+                }
+
+                MomoUi.pill(dc, _activities.size() > 0 ? "UP/DOWN" : "refresh", 214);
             } else {
                 var item = _activities[_page - 1];
+                var kind = item["activityId"] as String;
                 var title = item["title"] as String;
                 var completed = item["completed"] as Number;
                 var helped = item["helped"] as Number;
                 var rated = item["rated"] as Number;
                 var rate = item["helpfulRate"] as Number;
+                var accent = MomoUi.activityAccent(kind);
 
-                MomoUi.text(dc, title, 86, MomoUi.INK);
-                var receiptLine = rated > 0
-                    ? helped + "/" + rated + " helped (" + rate + "%)"
-                    : "No ratings yet";
-                MomoUi.text(dc, receiptLine, 112, MomoUi.MINT);
+                // Activity badge + vector icon (ring on BG keeps crescent/eye cutouts crisp)
+                dc.setPenWidth(2);
+                dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+                dc.drawCircle(130, 32, 15);
+                dc.setPenWidth(1);
+                MomoUi.drawIcon(dc, kind, 130, 32, accent);
+
+                MomoUi.titleText(dc, title, 54, MomoUi.INK);
 
                 var ratio = rated > 0 ? (helped.toFloat() / rated.toFloat()) : 0.0f;
                 var barColor = rate >= 60 ? MomoUi.MINT : (rate >= 30 ? MomoUi.GOLD : MomoUi.LAVENDER);
-                MomoUi.drawProgressBar(dc, 52, 142, 156, 8, ratio, barColor);
 
-                MomoUi.text(dc, completed + (completed == 1 ? " completed" : " completed"), 162, MomoUi.MUTED);
-                MomoUi.text(dc, (_page + 1) + " / " + totalPages, 186, MomoUi.MUTED);
-                hint = "UP/DOWN: browse";
+                dc.setColor(barColor, MomoUi.BG);
+                dc.drawText(130, 82, Graphics.FONT_LARGE, rated > 0 ? rate.toString() + "%" : "--", Graphics.TEXT_JUSTIFY_CENTER);
+
+                MomoUi.drawProgressBar(dc, 48, 138, 164, 10, ratio, barColor);
+
+                var statLine = rated > 0
+                    ? helped + "/" + rated + " helped · " + completed + " done"
+                    : completed + " done · unrated";
+                MomoUi.text(dc, statLine, 158, MomoUi.INK);
+                MomoUi.text(dc, (_page + 1) + " of " + totalPages, 182, MomoUi.MUTED);
+                MomoUi.pill(dc, "UP/DOWN", 214);
             }
-            for (var i = 0; i < totalPages && i < 7; i += 1) {
-                dc.setColor(i == _page ? MomoUi.MINT : MomoUi.EDGE, MomoUi.BG);
-                dc.fillCircle(237, 112 + i * 7, i == _page ? 2 : 1);
-            }
-        } else {
-            MomoUi.paragraph(dc, _message, 105, 4, MomoUi.INK);
-            hint = _state == :empty ? "BACK: return" : "START: retry";
+            return;
         }
-        MomoUi.pill(dc, hint, 215);
+
+        if (_state == :error) {
+            MomoUi.drawStartTick(dc, MomoUi.MINT);
+        }
+        MomoUi.heading(dc, "What works");
+        MomoUi.text(dc, _mode.equals("demo") ? "DEMO RECEIPTS" : "RECEIPTS", 50, MomoUi.MINT);
+        MomoUi.drawDivider(dc, 76, 120);
+        MomoUi.paragraph(dc, _message, 92, 4, MomoUi.INK);
+        var pillLabel = _state == :loading ? "wait..." : (_state == :empty ? "back" : "retry");
+        MomoUi.pill(dc, pillLabel, 214);
     }
 }
 

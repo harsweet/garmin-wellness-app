@@ -182,24 +182,33 @@ class MomoOnboardingView extends WatchUi.View {
     function onUpdate(dc as Graphics.Dc) as Void {
         MomoUi.clear(dc);
         if (_state == :qr && _page == 0) {
+            MomoUi.drawPageRail(dc, 2, 0, MomoUi.MINT);
             dc.setColor(MomoUi.INK, MomoUi.BG);
             dc.drawText(130, 17, Graphics.FONT_SMALL, "Scan QR or...", Graphics.TEXT_JUSTIFY_CENTER);
             drawQr(dc);
             MomoUi.text(dc, "UP/DOWN: code", 219, MomoUi.MINT);
         } else if (_state == :qr) {
+            MomoUi.drawStartTick(dc, MomoUi.MINT);
+            MomoUi.drawPageRail(dc, 2, 1, MomoUi.MINT);
             MomoUi.heading(dc, "Or enter code");
-            MomoUi.text(dc, "at this setup URL", 65, MomoUi.MUTED);
+            MomoUi.text(dc, "at this setup URL", 52, MomoUi.MUTED);
             dc.setColor(MomoUi.MINT, MomoUi.BG);
-            dc.drawText(130, 90, Graphics.FONT_LARGE, _code.length() > 0 ? _code : "----", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(130, 78, Graphics.FONT_LARGE, _code.length() > 0 ? _code : "----", Graphics.TEXT_JUSTIFY_CENTER);
+            MomoUi.drawDivider(dc, 130, 124);
             var displayUrl = _setupUrl;
             if (displayUrl.length() > 8 && displayUrl.substring(0, 8).equals("https://")) { displayUrl = displayUrl.substring(8, displayUrl.length()); }
-            MomoUi.paragraph(dc, displayUrl.length() > 0 ? displayUrl : "Scan the QR on the other page.", 145, 3, MomoUi.INK);
-            MomoUi.text(dc, "UP/DOWN: QR", 217, MomoUi.MUTED);
+            MomoUi.paragraph(dc, displayUrl.length() > 0 ? displayUrl : "Scan the QR on the other page.", 140, 3, MomoUi.INK);
+            MomoUi.pill(dc, "QR code", 214);
         } else {
+            if (_state == :error) {
+                MomoUi.drawStartTick(dc, MomoUi.MINT);
+            }
             MomoUi.heading(dc, "Set up Momo");
-            MomoUi.paragraph(dc, _state == :ready ? "You're set. Momo is ready." : _message, 88, 4, MomoUi.INK);
-            MomoUi.pill(dc, _state == :loading ? "Connecting..." : "START: retry", 194);
-            MomoUi.text(dc, "BACK: skip", 227, MomoUi.MUTED);
+            MomoUi.drawDivider(dc, 56, 110);
+            MomoUi.paragraph(dc, _state == :ready ? "You're set. Momo is ready." : _message, 74, 4, MomoUi.INK);
+            var pillLabel = _state == :loading ? "wait..." : (_state == :ready ? "ready" : "retry");
+            MomoUi.pill(dc, pillLabel, 190);
+            MomoUi.text(dc, "BACK: skip", 220, MomoUi.MUTED);
         }
     }
 }

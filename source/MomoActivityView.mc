@@ -333,51 +333,73 @@ class MomoActivityView extends WatchUi.View {
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
-        MomoUi.clear(dc); MomoUi.heading(dc, "Your break");
-        MomoUi.text(dc, _mode.equals("demo") ? "SIMULATED / DEMO" : "ACTIVITY SESSION", 56, MomoUi.MINT);
-        var hint = "START: options";
+        MomoUi.clear(dc);
         var title = _activity["title"] instanceof String ? _activity["title"] as String : "A little space for you";
+        var kind = activityKind();
+        var coachLine = _activity["coachLine"] instanceof String ? _activity["coachLine"] as String : "";
+
         if (_state == :scheduled) {
-            MomoUi.paragraph(dc, title, 96, 2, MomoUi.INK);
+            var accent = MomoUi.activityAccent(kind);
+            MomoUi.drawStartTick(dc, accent);
+            MomoUi.text(dc, _mode.equals("demo") ? "DEMO BREAK" : "READY TO BREAK", 22, accent);
+            dc.setPenWidth(1);
+            dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+            dc.drawCircle(130, 54, 14);
+            MomoUi.drawIcon(dc, kind, 130, 54, accent);
+            MomoUi.titleText(dc, title, 78, MomoUi.INK);
             var label = _activity["label"] instanceof String ? _activity["label"] as String : "When you're ready";
-            MomoUi.paragraph(dc, label, 153, 2, MomoUi.MUTED);
-            hint = "START: begin";
+            MomoUi.text(dc, label, 108, MomoUi.MUTED);
+            MomoUi.drawDivider(dc, 134, 140);
+            var schedCue = coachLine.length() > 0 ? coachLine : "Take a quick reset";
+            MomoUi.paragraph(dc, schedCue, 144, 2, MomoUi.MUTED);
+            MomoUi.pill(dc, "begin", 216);
         } else if (_state == :running) {
             var remaining = _tracker.durationSeconds() - _tracker.elapsedSeconds();
             var clock = formatClock(remaining);
             var progress = computeProgress();
-            var kind = activityKind();
-            var coachLine = _activity["coachLine"] instanceof String ? _activity["coachLine"] as String : "";
 
             if (kind.equals("breathe")) {
-                MomoUi.drawBezelProgress(dc, progress, MomoUi.MINT);
                 var cycleMs = _tracker.elapsedMs() % 12000;
                 var phase = (cycleMs / 4000).toNumber();
                 var phaseFrac = (cycleMs % 4000).toFloat() / 4000.0f;
                 var radius = 28;
                 var phaseLabel = "INHALE";
                 var ringColor = MomoUi.MINT;
+                var discColor = MomoUi.SURFACE;
                 if (phase == 0) {
                     radius = 28 + (26 * phaseFrac).toNumber();
                 } else if (phase == 1) {
                     radius = 52 + ((_animFrame % 4) < 2 ? 2 : 0);
                     phaseLabel = "HOLD";
                     ringColor = MomoUi.GOLD;
+                    discColor = MomoUi.SURFACE;
                 } else {
                     radius = 54 - (26 * phaseFrac).toNumber();
                     phaseLabel = "EXHALE";
                     ringColor = MomoUi.LAVENDER;
+                    discColor = MomoUi.DEEP;
                 }
-                dc.setColor(MomoUi.EDGE, MomoUi.BG);
-                dc.drawCircle(130, 134, 56);
-                dc.setPenWidth(4);
-                dc.setColor(ringColor, MomoUi.BG);
-                dc.drawCircle(130, 134, radius);
+                MomoUi.drawBezelProgress(dc, progress, ringColor);
+                MomoUi.text(dc, _mode.equals("demo") ? "DEMO · BREATHE" : "BREATHE", 22, MomoUi.MINT);
                 dc.setPenWidth(1);
+                dc.setColor(MomoUi.EDGE, MomoUi.BG);
+                dc.drawCircle(130, 122, 58);
+                dc.setColor(discColor, MomoUi.BG);
+                dc.fillCircle(130, 122, radius - 3);
+                dc.setPenWidth(5);
                 dc.setColor(ringColor, MomoUi.BG);
-                dc.drawText(130, 110, Graphics.FONT_XTINY, phaseLabel, Graphics.TEXT_JUSTIFY_CENTER);
-                dc.setColor(MomoUi.INK, MomoUi.BG);
-                dc.drawText(130, 132, Graphics.FONT_SMALL, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawCircle(130, 122, radius);
+                dc.setPenWidth(1);
+                dc.setColor(ringColor, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(130, 96, Graphics.FONT_XTINY, phaseLabel, Graphics.TEXT_JUSTIFY_CENTER);
+                dc.setColor(MomoUi.INK, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(130, 116, Graphics.FONT_MEDIUM, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                var dotXs = [116, 130, 144] as Array<Number>;
+                for (var i = 0; i < 3; i += 1) {
+                    var isCurrent = (i == phase);
+                    dc.setColor(isCurrent ? ringColor : MomoUi.EDGE, MomoUi.BG);
+                    dc.fillCircle(dotXs[i], 195, isCurrent ? 3 : 2);
+                }
             } else if (kind.equals("stretch")) {
                 MomoUi.drawBezelProgress(dc, progress, MomoUi.PEACH);
                 var stepsList = [
@@ -389,11 +411,17 @@ class MomoActivityView extends WatchUi.View {
                     "Deep sigh & shake"
                 ] as Array<String>;
                 var stepIdx = (_tracker.elapsedSeconds() / 30).toNumber() % 6;
-                MomoUi.text(dc, "STEP " + (stepIdx + 1) + "/6", 82, MomoUi.PEACH);
-                MomoUi.paragraph(dc, stepsList[stepIdx], 106, 2, MomoUi.INK);
+                MomoUi.text(dc, "STRETCH · " + (stepIdx + 1) + "/6", 22, MomoUi.PEACH);
+                for (var i = 0; i < 6; i += 1) {
+                    var pipColor = i < stepIdx ? MomoUi.PEACH : (i == stepIdx ? MomoUi.INK : MomoUi.EDGE);
+                    dc.setColor(pipColor, MomoUi.BG);
+                    dc.fillRoundedRectangle(72 + i * 20, 48, 16, 4, 2);
+                }
+                MomoUi.titleText(dc, stepsList[stepIdx], 66, MomoUi.INK);
                 dc.setColor(MomoUi.INK, MomoUi.BG);
-                dc.drawText(130, 150, Graphics.FONT_MEDIUM, clock, Graphics.TEXT_JUSTIFY_CENTER);
-                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, MomoUi.PEACH);
+                dc.drawText(130, 108, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                var stretchCue = coachLine.length() > 0 ? coachLine : "30s each · easy breath";
+                MomoUi.text(dc, stretchCue, 168, MomoUi.MUTED);
             } else if (kind.equals("eyes")) {
                 MomoUi.drawBezelProgress(dc, progress, MomoUi.LAVENDER);
                 var eyeSteps = [
@@ -406,66 +434,112 @@ class MomoActivityView extends WatchUi.View {
                 if (stepLen < 15) { stepLen = 15; }
                 var eyeIdx = (_tracker.elapsedSeconds() / stepLen).toNumber() % 4;
                 var pulse = (_animFrame % 8) < 4 ? (_animFrame % 4) : (4 - (_animFrame % 4));
+                MomoUi.text(dc, "EYE RESET", 22, MomoUi.LAVENDER);
+                dc.setPenWidth(1);
                 dc.setColor(MomoUi.SURFACE, MomoUi.BG);
-                dc.drawArc(130, 136, 48 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 20, 160);
+                dc.drawArc(130, 82, 31 + (pulse / 2).toNumber(), Graphics.ARC_COUNTER_CLOCKWISE, 42, 138);
+                dc.setPenWidth(2);
                 dc.setColor(MomoUi.LAVENDER, MomoUi.BG);
-                dc.drawArc(130, 136, 38 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 35, 145);
-                MomoUi.text(dc, "20-20-20 EYE BREAK", 80, MomoUi.LAVENDER);
-                MomoUi.paragraph(dc, eyeSteps[eyeIdx], 108, 2, MomoUi.INK);
+                dc.drawArc(130, 82, 26, Graphics.ARC_COUNTER_CLOCKWISE, 33, 147);
+                dc.drawArc(130, 54, 26, Graphics.ARC_COUNTER_CLOCKWISE, 213, 327);
+                dc.setPenWidth(1);
+                dc.setColor(MomoUi.LAVENDER, MomoUi.BG);
+                dc.fillCircle(130, 68, 7 + (pulse / 2).toNumber());
+                dc.setColor(MomoUi.BG, MomoUi.BG);
+                dc.fillCircle(130, 68, 3);
                 dc.setColor(MomoUi.INK, MomoUi.BG);
-                dc.drawText(130, 154, Graphics.FONT_MEDIUM, clock, Graphics.TEXT_JUSTIFY_CENTER);
-                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, MomoUi.LAVENDER);
+                dc.fillCircle(132, 66, 1);
+                MomoUi.titleText(dc, eyeSteps[eyeIdx], 98, MomoUi.INK);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(130, 130, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                var eyeDotXs = [112, 124, 136, 148] as Array<Number>;
+                for (var i = 0; i < 4; i += 1) {
+                    var isCurrent = (i == eyeIdx);
+                    var isDone = (i < eyeIdx);
+                    dc.setColor(isCurrent ? MomoUi.INK : (isDone ? MomoUi.LAVENDER : MomoUi.EDGE), MomoUi.BG);
+                    dc.fillCircle(eyeDotXs[i], 186, isCurrent ? 3 : 2);
+                }
             } else if (kind.equals("walk") || kind.equals("stairs") || kind.equals("sunlight")) {
-                var arcColor = kind.equals("sunlight") ? MomoUi.GOLD : (kind.equals("stairs") ? MomoUi.PEACH : MomoUi.MINT);
+                var arcColor = MomoUi.activityAccent(kind);
                 MomoUi.drawBezelProgress(dc, progress, arcColor);
-                MomoUi.text(dc, title, 82, MomoUi.INK);
+                MomoUi.drawIcon(dc, kind, 130, 34, arcColor);
+                var kindLabel = kind.equals("stairs") ? "STAIRS" : (kind.equals("sunlight") ? "SUNLIGHT" : "WALK");
+                MomoUi.text(dc, kindLabel, 50, arcColor);
                 dc.setColor(MomoUi.INK, MomoUi.BG);
-                dc.drawText(130, 104, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(130, 72, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                MomoUi.drawDivider(dc, 128, 144);
                 var metric = _tracker.tracking().equals("steps")
                     ? _tracker.steps() + " / " + _tracker.targetSteps() + " steps"
                     : (kind.equals("stairs") && _liveElevation != null
                         ? "Elev " + _liveElevation + "m"
                         : (kind.equals("sunlight") ? "Step into daylight" : _tracker.steps() + " steps"));
-                if (_liveHr != null) { metric += " · HR " + _liveHr; }
-                MomoUi.text(dc, metric, 152, arcColor);
+                if (_liveHr != null) {
+                    var hrText = "" + _liveHr;
+                    var metricW = dc.getTextWidthInPixels(metric, Graphics.FONT_XTINY);
+                    var hrW = dc.getTextWidthInPixels(hrText, Graphics.FONT_XTINY);
+                    var totalW = metricW + 10 + 12 + 4 + hrW;
+                    if (totalW <= 198) {
+                        var startX = 130 - (totalW / 2).toNumber();
+                        var fontH = dc.getFontHeight(Graphics.FONT_XTINY);
+                        dc.setColor(arcColor, MomoUi.BG);
+                        dc.drawText(startX, 136, Graphics.FONT_XTINY, metric, Graphics.TEXT_JUSTIFY_LEFT);
+                        var heartCx = startX + metricW + 16;
+                        var heartCy = 136 + (fontH / 2).toNumber();
+                        MomoUi.drawIcon(dc, "heart", heartCx, heartCy, MomoUi.CORAL);
+                        dc.setColor(MomoUi.INK, MomoUi.BG);
+                        dc.drawText(heartCx + 10, 136, Graphics.FONT_XTINY, hrText, Graphics.TEXT_JUSTIFY_LEFT);
+                    } else {
+                        MomoUi.text(dc, metric + " · HR " + _liveHr, 136, arcColor);
+                    }
+                } else {
+                    MomoUi.text(dc, metric, 136, arcColor);
+                }
                 var cue = coachLine.length() > 0
                     ? coachLine
                     : (kind.equals("stairs") ? "One flight at a time." : (kind.equals("sunlight") ? "Soak in a little daylight." : "Light steps. Unplug a bit."));
-                MomoUi.text(dc, cue, 173, MomoUi.MUTED);
-                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, arcColor);
+                MomoUi.paragraph(dc, cue, 164, 2, MomoUi.MUTED);
             } else {
                 MomoUi.drawBezelProgress(dc, progress, MomoUi.LAVENDER);
+                MomoUi.text(dc, "QUIET REST", 22, MomoUi.LAVENDER);
+                MomoUi.drawIcon(dc, "rest", 130, 56, MomoUi.LAVENDER);
                 var pulse = (_animFrame % 8) < 4 ? (_animFrame % 4) : (4 - (_animFrame % 4));
+                dc.setPenWidth(1);
                 dc.setColor(MomoUi.SURFACE, MomoUi.BG);
-                dc.drawCircle(130, 134, 46 + pulse);
+                dc.drawArc(130, 110, 62 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 155, 205);
+                dc.drawArc(130, 110, 62 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 335, 25);
                 dc.setColor(MomoUi.LAVENDER, MomoUi.BG);
-                dc.drawArc(130, 134, 38 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 195, 345);
-                MomoUi.text(dc, title, 82, MomoUi.LAVENDER);
+                dc.drawArc(130, 110, 52 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 160, 200);
+                dc.drawArc(130, 110, 52 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 340, 20);
                 dc.setColor(MomoUi.INK, MomoUi.BG);
-                dc.drawText(130, 114, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(130, 86, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
                 var restCue = coachLine.length() > 0 ? coachLine : "Quiet rest. Shoulders down.";
-                MomoUi.text(dc, restCue, 168, MomoUi.MUTED);
-                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, MomoUi.LAVENDER);
+                MomoUi.paragraph(dc, restCue, 154, 2, MomoUi.MUTED);
             }
-            if (_tracker.goalMet()) { hint = "START: finish"; }
+            MomoUi.pill(dc, _tracker.goalMet() ? "finish" : "options", 218);
         } else if (_state == :feedback) {
             MomoUi.drawSparkles(dc, _animFrame);
-            MomoUi.text(dc, "TINY HIGH-FIVE!", 94, MomoUi.MINT);
-            MomoUi.paragraph(dc, "You made room for yourself. How did that feel?", 128, 3, MomoUi.INK);
-            hint = "START: tell Momo";
+            MomoUi.drawIcon(dc, "check", 130, 62, MomoUi.MINT);
+            MomoUi.titleText(dc, "Nice reset!", 92, MomoUi.MINT);
+            MomoUi.paragraph(dc, "How did that break feel?", 128, 2, MomoUi.INK);
+            MomoUi.pill(dc, "tell Momo", 216);
         } else if (_state == :done) {
             MomoUi.drawSparkles(dc, _animFrame);
-            MomoUi.text(dc, "NOTED, HUMAN.", 94, MomoUi.MINT);
-            MomoUi.paragraph(dc, _message, 128, 3, MomoUi.INK);
-            hint = "START: back";
+            MomoUi.drawIcon(dc, "check", 130, 58, MomoUi.GOLD);
+            MomoUi.titleText(dc, "Noted!", 86, MomoUi.MINT);
+            MomoUi.paragraph(dc, _message, 120, 3, MomoUi.INK);
+            MomoUi.pill(dc, "done", 216);
         } else if (_state == :saving) {
-            MomoUi.paragraph(dc, "Filing your tiny adventure...", 109, 3, MomoUi.INK);
-            hint = "Saving...";
+            MomoUi.heading(dc, "Saving");
+            MomoUi.drawDivider(dc, 58, 120);
+            MomoUi.paragraph(dc, "Filing your break...", 104, 3, MomoUi.MUTED);
+            MomoUi.pill(dc, "saving...", 216);
         } else {
-            MomoUi.paragraph(dc, _message, 103, 4, MomoUi.INK);
-            hint = "START: retry";
+            MomoUi.drawStartTick(dc, MomoUi.CORAL);
+            MomoUi.heading(dc, "Paused");
+            MomoUi.drawDivider(dc, 58, 120);
+            MomoUi.paragraph(dc, _message, 86, 4, MomoUi.INK);
+            MomoUi.pill(dc, "retry", 216);
         }
-        MomoUi.pill(dc, hint, 215);
     }
 
 }

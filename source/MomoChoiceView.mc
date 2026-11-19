@@ -27,37 +27,43 @@ class MomoChoiceView extends WatchUi.View {
         _callback.invoke(id);
     }
     function onUpdate(dc as Graphics.Dc) as Void {
-        MomoUi.clear(dc); MomoUi.heading(dc, _title);
+        MomoUi.clear(dc);
+        MomoUi.drawStartTick(dc, MomoUi.MINT);
+        MomoUi.heading(dc, _title);
+        MomoUi.drawDivider(dc, 54, 110);
         var first = _selected > 1 ? _selected - 1 : 0;
         var lastFirst = _items.size() > 3 ? _items.size() - 3 : 0;
         if (first > lastFirst) { first = lastFirst; }
+        var fontH = dc.getFontHeight(Graphics.FONT_XTINY);
         for (var row = 0; row < 3 && first + row < _items.size(); row += 1) {
             var index = first + row;
             var item = _items[index];
             var box = rowBounds(row);
             var top = box["y"] as Number;
-            if (index == _selected) {
+            var isSelected = (index == _selected);
+            if (isSelected) {
                 dc.setColor(MomoUi.SURFACE, MomoUi.BG);
-                dc.fillRoundedRectangle(31, top, 198, 42, 9);
-                dc.setColor(MomoUi.MINT, MomoUi.BG);
-                dc.drawRoundedRectangle(31, top, 198, 42, 9);
+                dc.fillRoundedRectangle(31, top, 198, 42, 10);
+                dc.setColor(MomoUi.MINT, MomoUi.SURFACE);
+                dc.fillRoundedRectangle(33, top + 6, 4, 30, 2);
             }
             var label = item["label"] as String;
             var detail = item["detail"] instanceof String ? item["detail"] as String : "";
-            var background = index == _selected ? MomoUi.SURFACE : MomoUi.BG;
-            dc.setColor(index == _selected ? MomoUi.INK : MomoUi.MUTED, background);
-            var textTop = detail.length() > 0 ? top + 2 : top + 11;
-            dc.drawText(49, textTop, Graphics.FONT_XTINY, MomoUi.fit(dc, label, Graphics.FONT_XTINY, 166), Graphics.TEXT_JUSTIFY_LEFT);
+            var background = isSelected ? MomoUi.SURFACE : MomoUi.BG;
+            dc.setColor(isSelected ? MomoUi.INK : MomoUi.MUTED, background);
+            var textTop = detail.length() > 0 ? top + 3 : top + ((42 - fontH) / 2).toNumber();
+            dc.drawText(45, textTop, Graphics.FONT_XTINY, MomoUi.fit(dc, label, Graphics.FONT_XTINY, 174), Graphics.TEXT_JUSTIFY_LEFT);
             if (detail.length() > 0) {
-                dc.setColor(MomoUi.MUTED, background);
-                dc.drawText(49, top + 22, Graphics.FONT_XTINY, MomoUi.fit(dc, detail, Graphics.FONT_XTINY, 166), Graphics.TEXT_JUSTIFY_LEFT);
+                dc.setColor(isSelected ? MomoUi.MUTED : MomoUi.EDGE, background);
+                dc.drawText(45, top + 22, Graphics.FONT_XTINY, MomoUi.fit(dc, detail, Graphics.FONT_XTINY, 174), Graphics.TEXT_JUSTIFY_LEFT);
+            }
+            if (!isSelected && row < 2 && index + 1 < _items.size() && index + 1 != _selected) {
+                dc.setColor(MomoUi.EDGE, MomoUi.BG);
+                dc.drawLine(45, top + 44, 215, top + 44);
             }
         }
-        for (var i = 0; i < _items.size(); i += 1) {
-            dc.setColor(i == _selected ? MomoUi.MINT : MomoUi.EDGE, MomoUi.BG);
-            dc.fillCircle(240, 117 + i * 7, i == _selected ? 2 : 1);
-        }
-        MomoUi.text(dc, "START: select", 219, MomoUi.MUTED);
+        MomoUi.drawPageRail(dc, _items.size(), _selected, MomoUi.MINT);
+        MomoUi.text(dc, "START · select", 218, MomoUi.MUTED);
     }
 }
 

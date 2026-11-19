@@ -151,53 +151,85 @@ class MomoView extends WatchUi.View {
         var breath = _animStep <= 4 ? _animStep : 8 - _animStep;
         var bobOffsets = [0, -1, -2, -1, 0, 1, 1, 0] as Array<Number>;
         var bob = bobOffsets[_animStep];
+        var accent = _model.getAccent();
+        var cx = 130;
+        var cy = 112;
 
-        // The source images stay unchanged. A clipped viewport frames the mascot.
-        dc.setClip(30, 64, 200, 100);
-        dc.setColor(MomoUi.SURFACE, BG);
-        dc.drawCircle(130, 114, 42 + breath);
-        dc.setPenWidth(2);
-        dc.setColor(_model.getAccent(), BG);
-        dc.drawArc(130, 114, 46 + breath, Graphics.ARC_COUNTER_CLOCKWISE, 148, 212);
-        dc.drawArc(130, 114, 46 + breath, Graphics.ARC_COUNTER_CLOCKWISE, 328, 32);
-        dc.setPenWidth(1);
-
+        // 1. Render the mascot inside a square clip, then carve corners into a circular medallion.
+        dc.setClip(80, 62, 100, 100);
         if (_bitmap != null) {
             dc.drawBitmap(_model.getImageX(), _model.getImageY() + bob, _bitmap);
         }
-
-        if (_breaksToday > 0) {
-            dc.setColor(MomoUi.GOLD, BG);
-            dc.fillCircle(206, 78, 10);
-            dc.setColor(BG, MomoUi.GOLD);
-            dc.drawText(206, 68, Graphics.FONT_XTINY, _breaksToday > 9 ? "9+" : _breaksToday.toString(), Graphics.TEXT_JUSTIFY_CENTER);
-        }
         dc.setClip(0, 0, dc.getWidth(), dc.getHeight());
 
-        dc.setColor(Graphics.COLOR_WHITE, BG);
-        dc.drawText(130, 16, Graphics.FONT_SMALL, "momo", Graphics.TEXT_JUSTIFY_CENTER);
-        MomoUi.text(dc, statusBanner(), 45, _model.getAccent());
+        // Erase square JPEG corners cleanly into pure MIP black.
+        dc.setColor(BG, BG);
+        dc.setPenWidth(18);
+        dc.drawCircle(cx, cy, 56);
+        dc.setPenWidth(16);
+        dc.drawCircle(cx, cy, 68);
+        dc.setPenWidth(1);
 
+        // 2. Frame the circular portrait with an inner rim + animated breathing halo.
+        dc.setColor(MomoUi.EDGE, BG);
+        dc.drawCircle(cx, cy, 48);
+        var haloR = 51 + (breath / 2).toNumber();
+        dc.setPenWidth(3);
+        dc.setColor(accent, BG);
+        dc.drawCircle(cx, cy, haloR);
+        dc.setPenWidth(2);
+        dc.setColor(MomoUi.SURFACE, BG);
+        dc.drawArc(cx, cy, 56 + breath, Graphics.ARC_COUNTER_CLOCKWISE, 150, 210);
+        dc.drawArc(cx, cy, 56 + breath, Graphics.ARC_COUNTER_CLOCKWISE, 330, 30);
+        dc.setPenWidth(1);
+
+        // 3. Dock breaks-today badge cleanly on the 2 o'clock rim of the portrait.
+        if (_breaksToday > 0) {
+            var bx = 166;
+            var by = 76;
+            dc.setColor(BG, BG);
+            dc.fillCircle(bx, by, 12);
+            dc.setColor(MomoUi.GOLD, BG);
+            dc.fillCircle(bx, by, 10);
+            var badgeText = _breaksToday > 9 ? "9+" : _breaksToday.toString();
+            var fh = dc.getFontHeight(Graphics.FONT_XTINY);
+            dc.setColor(BG, MomoUi.GOLD);
+            dc.drawText(bx, by - (fh / 2).toNumber(), Graphics.FONT_XTINY, badgeText, Graphics.TEXT_JUSTIFY_CENTER);
+        }
+
+        // 4. Crisp top wordmark + live telemetry line.
+        MomoUi.drawStartTick(dc, accent);
+        dc.setColor(Graphics.COLOR_WHITE, BG);
+        dc.drawText(130, 12, Graphics.FONT_SMALL, "momo", Graphics.TEXT_JUSTIFY_CENTER);
+
+        var banner = statusBanner();
+        var bannerW = dc.getTextWidthInPixels(banner, Graphics.FONT_XTINY);
+        if (_cachedHr != null && bannerW < 154) {
+            MomoUi.drawIcon(dc, "heart", 130 - (bannerW / 2).toNumber() - 10, 48, MomoUi.CORAL);
+        }
+        MomoUi.text(dc, banner, 39, accent);
+
+        // 5. Two-line remark, sleek bottom capsule, and mood indicator dots.
         dc.setColor(Graphics.COLOR_WHITE, BG);
         drawRemark(dc, _model.getRemark());
 
+        MomoUi.pill(dc, "next idea", 214);
+
         for (var i = 0; i < _model.PHASE_COUNT; i += 1) {
-            dc.setColor(i == _model.getPhase() ? _model.getAccent() : 0x555555, BG);
+            dc.setColor(i == _model.getPhase() ? accent : MomoUi.EDGE, BG);
             if (i == _model.getPhase()) {
-                dc.fillRoundedRectangle(110 + i * 16, 245, 10, 4, 2);
+                dc.fillRoundedRectangle(109 + i * 16, 244, 12, 4, 2);
             } else {
-                dc.fillCircle(115 + i * 16, 247, 2);
+                dc.fillCircle(115 + i * 16, 246, 2);
             }
         }
-
-        MomoUi.pill(dc, "START: next idea", 212);
     }
 
     private function drawRemark(dc as Graphics.Dc, remark as String) as Void {
         var lines = wrapRemark(dc, remark);
         var font = Graphics.FONT_XTINY;
         var lineHeight = dc.getFontHeight(font);
-        var top = 168 + ((38 - lines.size() * lineHeight) / 2).toNumber();
+        var top = 171 + ((38 - lines.size() * lineHeight) / 2).toNumber();
         for (var i = 0; i < lines.size(); i += 1) {
             MomoUi.text(dc, lines[i], top + i * lineHeight, MomoUi.INK);
         }

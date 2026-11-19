@@ -68,21 +68,43 @@ class MomoPairingView extends WatchUi.View {
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-        dc.clear();
-        dc.drawText(130, 30, Graphics.FONT_SMALL, "Pair Momo", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
-        dc.drawText(130, 72, Graphics.FONT_XTINY, _client.isDemoServer() ? "DEMO CODE: 000000" : "Code from setupMomo", Graphics.TEXT_JUSTIFY_CENTER);
+        MomoUi.clear(dc);
+        MomoUi.drawStartTick(dc, MomoUi.MINT);
+        MomoUi.heading(dc, "Pair Momo");
+        MomoUi.text(dc, _client.isDemoServer() ? "DEMO CODE: 000000" : "Code from setupMomo", 54, MomoUi.MUTED);
+        MomoUi.drawDivider(dc, 80, 124);
+
+        var boxY = 98;
+        var boxW = 26;
+        var boxH = 44;
+        var fontH = dc.getFontHeight(Graphics.FONT_MEDIUM);
+        var digitY = boxY + ((boxH - fontH) / 2).toNumber() - 1;
         for (var i = 0; i < 6; i += 1) {
-            var x = 65 + i * 26;
-            dc.setColor(i == _position ? 0x55FFAA : Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawText(x, 108, Graphics.FONT_MEDIUM, _digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER);
-            if (i == _position) { dc.fillRectangle(x - 9, 142, 18, 3); }
+            var boxX = 42 + i * 30;
+            var cx = boxX + 13;
+            var active = (i == _position);
+            if (active) {
+                dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+                dc.fillRoundedRectangle(boxX, boxY, boxW, boxH, 6);
+                dc.setColor(MomoUi.MINT, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, digitY, Graphics.FONT_MEDIUM, _digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER);
+                dc.setColor(MomoUi.MINT, MomoUi.BG);
+                dc.fillRoundedRectangle(boxX + 4, boxY + boxH - 4, boxW - 8, 3, 1);
+            } else {
+                dc.setColor(MomoUi.EDGE, MomoUi.BG);
+                dc.drawRoundedRectangle(boxX, boxY, boxW, boxH, 6);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(cx, digitY, Graphics.FONT_MEDIUM, _digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER);
+            }
         }
-        dc.setColor(0xAAAAAA, Graphics.COLOR_BLACK);
-        dc.drawText(130, 163, Graphics.FONT_XTINY, _loading ? "Pairing..." : "UP / DOWN: change digit", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(130, 188, Graphics.FONT_XTINY, _error.length() > 0 ? _error : "START: next / connect", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(130, 214, Graphics.FONT_XTINY, "BACK: previous digit", Graphics.TEXT_JUSTIFY_CENTER);
+
+        if (_error.length() > 0) {
+            MomoUi.text(dc, _error, 158, MomoUi.CORAL);
+        } else {
+            MomoUi.text(dc, _loading ? "Pairing..." : "UP/DOWN: digit", 158, _loading ? MomoUi.MINT : MomoUi.MUTED);
+        }
+        MomoUi.text(dc, "BACK: previous", 182, MomoUi.MUTED);
+        MomoUi.pill(dc, _loading ? "wait..." : (_position < 5 ? "next" : "connect"), 210);
     }
 }
 
