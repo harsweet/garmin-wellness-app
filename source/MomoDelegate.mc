@@ -58,19 +58,46 @@ class MomoDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function homeChoices() as Array<Dictionary> {
-        return [{"id" => :suggestions, "label" => "Next idea", "detail" => "A little time for you"},
+        return [
+            {"id" => :suggestions, "label" => "Next idea", "detail" => "A little time for you"},
+            {"id" => :checkin, "label" => "Quick check-in", "detail" => "Tell Momo how you feel"},
+            {"id" => :receipts, "label" => "What works", "detail" => "Your break receipts"},
             {"id" => :setup, "label" => "Setup", "detail" => "Your goals & preferences"},
-            {"id" => :help, "label" => "Controls", "detail" => "Meet your little sidekick"}];
+            {"id" => :help, "label" => "Controls", "detail" => "Meet your little sidekick"}
+        ];
     }
 
     function primaryAction() as Symbol { return :suggestions; }
 
     function onHomeChoice(id as Symbol) as Void {
         if (id == :suggestions) { openSuggestions(); }
+        else if (id == :checkin) { openMoodPicker(); }
+        else if (id == :receipts) { openReceipts(); }
         else if (id == :setup) {
             var setup = new MomoOnboardingView(); setup.setReturnToPrevious(true);
             WatchUi.pushView(setup, new MomoOnboardingDelegate(setup), WatchUi.SLIDE_LEFT);
         } else { _view.toggleHelp(); }
+    }
+
+    function openMoodPicker() as Void {
+        var moods = new MomoChoiceView("How do you feel?", [
+            {"id" => :fried, "label" => "Fried", "detail" => "Low battery, need gentle"},
+            {"id" => :okay, "label" => "Okay", "detail" => "Steady, open to a reset"},
+            {"id" => :wired, "label" => "Wired", "detail" => "Restless, need to move"}
+        ], method(:onMoodChoice));
+        WatchUi.pushView(moods, new MomoChoiceDelegate(moods), WatchUi.SLIDE_LEFT);
+    }
+
+    function onMoodChoice(id as Symbol) as Void {
+        var mood = id == :fried ? "fried" : (id == :wired ? "wired" : "okay");
+        var calendarView = new MomoCalendarView();
+        calendarView.setCheckInMood(mood);
+        WatchUi.pushView(calendarView, new MomoCalendarDelegate(calendarView), WatchUi.SLIDE_LEFT);
+    }
+
+    function openReceipts() as Void {
+        var receipts = new MomoReceiptsView();
+        WatchUi.pushView(receipts, new MomoReceiptsDelegate(receipts), WatchUi.SLIDE_LEFT);
     }
 
     function nextRemark() as Void { _model.nextRemark(); _view.refresh(); }

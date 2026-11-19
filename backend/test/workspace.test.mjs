@@ -94,3 +94,39 @@ test('claimed setup stores ratings on the paired device the phone connected to',
   assert.ok(roster.preferences.some(item => item.helpful >= 1));
   assert.equal(cookie.startsWith(`${ONBOARDING_COOKIE}=`), true);
 });
+
+test('workspace delegates watch insights action and authenticated /api/insights per wearer', async t => {
+  const { call } = await listen(workspace(), t);
+  const issued = await call('/', { action: 'onboarding', token: TOKEN });
+  const claimed = await call('/api/onboarding/claim', { code: issued.data.code });
+  const cookie = claimed.cookie.split(';')[0];
+  await call('/api/profile', { goals: ['move', 'outside', 'breaks'] }, { Cookie: cookie });
+
+  assert.equal((await call('/api/insights')).response.status, 401);
+
+  const suggestion = (await call('/', { action: 'suggestions', token: TOKEN })).data.suggestion;
+  assert.ok(suggestion.coachLine);
+  const accepted = await call('/', { action: 'decide', token: TOKEN, suggestionId: suggestion.id, decision: 'accept' });
+  const activityId = accepted.data.activity.id;
+  await call('/', { action: 'start', token: TOKEN, activityId });
+  await call('/', { action: 'complete', token: TOKEN, activityId, source: 'steps', steps: 180, elapsedSeconds: 480, vitals: { startHr: 70, endHr: 92 } });
+  const rated = await call('/', { action: 'feedback', token: TOKEN, activityId, helpful: 'yes' });
+  assert.match(rated.data.message, /^Walks helped 1 of 1 times/);
+
+  const watchRes = await call('/', { action: 'insights', token: TOKEN });
+  assert.equal(watchRes.data.insights.totalCompleted, 1);
+  assert.equal(watchRes.data.insights.totalHelpful, 1);
+  assert.equal(watchRes.data.insights.streakDays, 1);
+  assert.equal(watchRes.data.insights.topActivity.activityId, 'walk');
+
+  const phoneRes = await call('/api/insights', undefined, { Cookie: cookie });
+  assert.equal(phoneRes.response.status, 200);
+  assert.equal(phoneRes.data.insights.totalCompleted, 1);
+  assert.equal(phoneRes.data.recentSessions.length, 1);
+  assert.equal(phoneRes.data.recentSessions[0].completion.vitals.endHr, 92);
+
+  const adminUser = (await call('/api/admin/users')).data.users[0];
+  assert.equal(adminUser.insights.totalCompleted, 1);
+  assert.equal(adminUser.insights.streakDays, 1);
+});
+

@@ -78,6 +78,14 @@ class MomoCalendarClient {
         request("suggestions", {"context" => MomoActivityTracker.context(isDemoServer())}, callback, true);
     }
 
+    function suggestionsWithMood(mood as String, callback as Method) as Void {
+        request("suggestions", {"context" => MomoActivityTracker.contextWithMood(isDemoServer(), mood)}, callback, true);
+    }
+
+    function insights(callback as Method) as Void {
+        request("insights", {}, callback, true);
+    }
+
     function status(callback as Method) as Void {
         request("status", {}, callback, true);
     }
@@ -100,6 +108,14 @@ class MomoCalendarClient {
 
     function completeActivity(activityId as String, source as String, steps as Number, elapsedSeconds as Number, callback as Method) as Void {
         request("complete", {"activityId" => activityId, "source" => source, "steps" => steps, "elapsedSeconds" => elapsedSeconds}, callback, true);
+    }
+
+    function completeActivityWithVitals(activityId as String, source as String, steps as Number, elapsedSeconds as Number, vitals as Dictionary or Null, callback as Method) as Void {
+        if (vitals == null || vitals.size() == 0) {
+            completeActivity(activityId, source, steps, elapsedSeconds, callback);
+            return;
+        }
+        request("complete", {"activityId" => activityId, "source" => source, "steps" => steps, "elapsedSeconds" => elapsedSeconds, "vitals" => vitals}, callback, true);
     }
 
     function feedback(activityId as String, helpful as String, callback as Method) as Void {
@@ -170,7 +186,7 @@ class MomoCalendarClient {
         }
     }
 
-    function onResponse(code as Number, data as Communications.ContentType or Null, context as Object) as Void {
+    function onResponse(code as Number, data as Dictionary or String or Null, context as Object) as Void {
         if (!(context instanceof Number) || context != _requestId || _callback == null) {
             return;
         }

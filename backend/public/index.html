@@ -38,16 +38,60 @@
         <button class="text-button" id="retry-connection" type="button">Try again</button>
       </div>
 
-      <section class="setup-complete" id="setup-complete" role="status" tabindex="-1" hidden>
-        <span class="complete-symbol" aria-hidden="true">✓</span>
-        <h2>You're paired.</h2>
-        <p>Look back at Momo. The watch notices on its own, and this device shows up in the watch room.</p>
-        <button class="text-button" id="edit-profile" type="button">Edit my goals</button>
+      <section class="setup-complete" id="setup-complete" tabindex="-1" hidden>
+        <div class="paired-card">
+          <span class="complete-symbol" aria-hidden="true">✓</span>
+          <h2 id="paired-heading">You're paired.</h2>
+          <p>Look back at Momo. The watch notices on its own, and this device shows up in the watch room.</p>
+          <button class="text-button" id="edit-profile" type="button">Edit my goals &amp; preferences</button>
+        </div>
+
+        <section class="receipts-card" id="receipts-section" aria-labelledby="receipts-title">
+          <div class="receipts-header">
+            <div>
+              <h3 id="receipts-title">Your Break Receipts</h3>
+              <p class="receipts-subtitle">How your recent breaks landed</p>
+            </div>
+            <button class="quiet-pill" id="refresh-receipts" type="button">Refresh</button>
+          </div>
+
+          <p class="receipts-status" id="receipts-status" role="status" aria-live="polite" hidden></p>
+
+          <div class="receipt-stats" id="receipt-stats" hidden>
+            <div class="stat-pill">
+              <span class="stat-value" id="stat-completed">0</span>
+              <span class="stat-label">Breaks done</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-value" id="stat-streak">0d</span>
+              <span class="stat-label">Day streak</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-value" id="stat-helpful">—</span>
+              <span class="stat-label">Helpful rate</span>
+            </div>
+          </div>
+
+          <div class="receipts-block" id="helps-block" hidden>
+            <h4>What actually helps you</h4>
+            <ul class="helps-list" id="helps-list"></ul>
+          </div>
+
+          <div class="receipts-block" id="recent-block" hidden>
+            <h4>Recent break receipts</h4>
+            <ol class="receipts-list" id="receipts-list"></ol>
+          </div>
+        </section>
       </section>
 
       <section class="setup-content" id="setup-content" aria-label="Your goals and context" hidden>
-        <form id="profile-form" aria-describedby="save-status">
-          <fieldset>
+        <form id="profile-form" aria-describedby="save-status" novalidate>
+          <div class="field-group">
+            <label class="field-label" for="nickname">What should Momo call you? <span>Optional</span></label>
+            <input class="text-input" id="nickname" name="nickname" type="text" maxlength="32" autocomplete="nickname" placeholder="e.g. Sam">
+          </div>
+
+          <fieldset class="form-section">
             <legend>I want a little more…</legend>
             <div class="goal-choices">
               <label class="goal-choice"><input type="checkbox" name="goals" value="move"><span><strong>Movement</strong><small>Less chair. More you.</small></span></label>
@@ -56,13 +100,108 @@
             </div>
           </fieldset>
 
+          <fieldset class="form-section">
+            <legend>Momo’s humor vibe</legend>
+            <div class="humor-choices">
+              <label class="humor-choice">
+                <input type="radio" name="humor" value="gentle">
+                <span><strong>Gentle</strong><small>Warm &amp; soft nudges</small></span>
+              </label>
+              <label class="humor-choice">
+                <input type="radio" name="humor" value="playful" checked>
+                <span><strong>Playful</strong><small>Light monkey banter</small></span>
+              </label>
+              <label class="humor-choice">
+                <input type="radio" name="humor" value="cheeky">
+                <span><strong>Cheeky</strong><small>Sassy chair callouts</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Max break length</legend>
+            <div class="length-pills">
+              <label class="length-pill"><input type="radio" name="maxBreakMinutes" value="2"><span>2 min</span></label>
+              <label class="length-pill"><input type="radio" name="maxBreakMinutes" value="5"><span>5 min</span></label>
+              <label class="length-pill"><input type="radio" name="maxBreakMinutes" value="8" checked><span>8 min</span></label>
+              <label class="length-pill"><input type="radio" name="maxBreakMinutes" value="15"><span>15 min</span></label>
+            </div>
+          </fieldset>
+
+          <div class="form-section">
+            <label class="toggle-card" for="seated-only">
+              <span class="toggle-copy">
+                <strong>Seated &amp; low-impact only</strong>
+                <small>Skips standing walks, stairs, and outdoor sunlight breaks.</small>
+              </span>
+              <span class="switch-control">
+                <input id="seated-only" name="seatedOnly" type="checkbox" role="switch">
+                <span class="switch-track" aria-hidden="true"></span>
+              </span>
+            </label>
+          </div>
+
+          <fieldset class="form-section" aria-describedby="activity-hint">
+            <legend>Break types</legend>
+            <div class="activity-chips" id="activity-chips">
+              <label class="activity-chip" data-activity="walk" data-minutes="8" data-standing="true">
+                <input type="checkbox" name="preferredActivities" value="walk">
+                <span><strong>Walk</strong><small>8m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+              <label class="activity-chip" data-activity="stretch" data-minutes="3" data-standing="false">
+                <input type="checkbox" name="preferredActivities" value="stretch">
+                <span><strong>Stretch</strong><small>3m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+              <label class="activity-chip" data-activity="breathe" data-minutes="2" data-standing="false">
+                <input type="checkbox" name="preferredActivities" value="breathe">
+                <span><strong>Breathe</strong><small>2m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+              <label class="activity-chip" data-activity="rest" data-minutes="2" data-standing="false">
+                <input type="checkbox" name="preferredActivities" value="rest">
+                <span><strong>Quiet rest</strong><small>2m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+              <label class="activity-chip" data-activity="eyes" data-minutes="2" data-standing="false">
+                <input type="checkbox" name="preferredActivities" value="eyes">
+                <span><strong>Eye reset</strong><small>2m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+              <label class="activity-chip" data-activity="stairs" data-minutes="4" data-standing="true">
+                <input type="checkbox" name="preferredActivities" value="stairs">
+                <span><strong>Stairs</strong><small>4m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+              <label class="activity-chip" data-activity="sunlight" data-minutes="5" data-standing="true">
+                <input type="checkbox" name="preferredActivities" value="sunlight">
+                <span><strong>Sunlight</strong><small>5m</small><em class="chip-note" aria-hidden="true"></em></span>
+              </label>
+            </div>
+            <p class="field-hint" id="activity-hint">Momo picks from your checked break types.</p>
+          </fieldset>
+
+          <details class="break-hours form-section" id="break-hours">
+            <summary>
+              <span>Break hours</span>
+              <span class="hours-summary" id="hours-summary">08:00 – 20:00</span>
+            </summary>
+            <div class="hours-grid">
+              <div class="time-field">
+                <label for="reminder-start">Earliest nudge</label>
+                <input id="reminder-start" name="reminderStart" type="time" value="08:00" required>
+              </div>
+              <div class="time-field">
+                <label for="reminder-end">Latest nudge</label>
+                <input id="reminder-end" name="reminderEnd" type="time" value="20:00" required>
+              </div>
+            </div>
+            <p class="field-hint">Momo stays quiet outside these hours.</p>
+          </details>
+
           <div class="context-field">
             <label for="additional-context">Anything Momo should know? <span>Optional</span></label>
             <textarea id="additional-context" name="additionalContext" rows="4" maxlength="1000" aria-describedby="context-note context-count" placeholder="I sit at a desk all day, prefer short breaks, and want to get outside more."></textarea>
             <div class="context-help"><p id="context-note">Your routine, preferences, or what gets in the way.</p><span id="context-count">0 / 1000</span></div>
           </div>
 
-          <button class="primary-button" id="save-profile" type="submit"><span id="save-label">Save & return to watch</span><span aria-hidden="true">↗</span></button>
+          <button class="primary-button" id="save-profile" type="submit"><span id="save-label">Save &amp; return to watch</span><span aria-hidden="true">↗</span></button>
+          <button class="text-button cancel-edit" id="cancel-edit" type="button" hidden>Back to break receipts</button>
           <p class="save-status" id="save-status" role="status" aria-live="polite">You can update these anytime.</p>
         </form>
         <p class="privacy-note">Momo remembers your goals and notes. They may be shared with Grok to personalize your suggestions.</p>

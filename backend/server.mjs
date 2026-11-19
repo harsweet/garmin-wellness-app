@@ -85,13 +85,14 @@ export function createDemoServer(calendar = new DemoCalendar(), { wellness = new
         response.setHeader('Set-Cookie', `${ONBOARDING_COOKIE}=${claimed.sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`);
         return json(response, { status: 'claimed', profileConfigured: claimed.profileConfigured, expiresAt: new Date(claimed.expiresAt).toISOString() });
       }
-      if (pathname === '/api/profile' || pathname === '/api/demo') {
+      if (pathname === '/api/profile' || pathname === '/api/demo' || pathname === '/api/insights') {
         if (!(allowLocalSetup && isLocalBrowser(request)) && !onboarding.authenticate(request.headers.cookie)) return json(response, { error: 'setup_required', message: 'Scan Momo to connect this browser.' }, 401);
         if (request.method === 'GET' && pathname === '/api/profile') return json(response, wellness.getProfile());
         if (request.method === 'POST' && pathname === '/api/profile') {
           if (!origin || !allowedOrigin(origin) || request.headers['x-momo-request'] !== '1') return json(response, { error: 'invalid_origin' }, 403);
           return json(response, await wellness.saveProfile(await readBody(request)));
         }
+        if (request.method === 'GET' && pathname === '/api/insights') return json(response, { insights: wellness.insights(), recentSessions: wellness.dashboard().sessions.slice(0, 12), profile: wellness.getProfile().profile });
         if (request.method === 'GET' && pathname === '/api/demo') return json(response, { ...calendar.status(), activities: calendar.activities.length, events: calendar.allEvents().map(event => ({ ...event, start: new Date(event.start).toISOString(), end: new Date(event.end).toISOString() })), wellness: wellness.dashboard() });
         return json(response, { error: 'not_found' }, 404);
       }
@@ -107,6 +108,7 @@ export function createDemoServer(calendar = new DemoCalendar(), { wellness = new
       if (!tokenMatches(body.token, deviceToken)) throw new CalendarError(401, 'unauthorized', 'Reconnect the latest Momo build.');
       if (body.action === 'onboarding') return json(response, await onboarding.issue());
       if (body.action === 'status') return json(response, wellness.status());
+      if (body.action === 'insights') return json(response, { ...wellness.status(), insights: wellness.insights() });
       if (body.action === 'availability') return json(response, calendar.availability());
       if (body.action === 'activities') {
         if (typeof body.slotId !== 'string') throw new CalendarError(400, 'invalid_slot', 'Choose a suggested slot.');

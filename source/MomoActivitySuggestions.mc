@@ -17,6 +17,8 @@ class MomoCalendarView extends MomoLegacyCalendarView {
     private var _message as String = "";
     private var _pendingAccept as String or Null = null;
     private var _loaded as Boolean = false;
+    private var _checkInMood as String = "unknown";
+    private var _sensorClue as String = "";
 
     function initialize() {
         MomoLegacyCalendarView.initialize();
@@ -26,6 +28,8 @@ class MomoCalendarView extends MomoLegacyCalendarView {
     function getState() as Symbol { return _active ? _stage : MomoLegacyCalendarView.getState(); }
     function getSuggestion() as Dictionary or Null { return _idea; }
     function getAiSource() as String { return _source; }
+    function getCheckInMood() as String { return _checkInMood; }
+    function setCheckInMood(mood as String) as Void { _checkInMood = mood.length() > 0 ? mood : "unknown"; }
     function setService(service as MomoCalendarClient) as Void { _service = service; }
 
     function onShow() as Void {
@@ -43,13 +47,34 @@ class MomoCalendarView extends MomoLegacyCalendarView {
 
     function dispose() as Void { _service.cancel(); MomoLegacyCalendarView.dispose(); }
 
+    private function computeSensorClue() as String {
+        var hr = MomoSensors.readHeartRate();
+        var stress = MomoSensors.readStress();
+        var bb = MomoSensors.readBodyBattery();
+        if (hr != null && bb != null) { return "LIVE · HR " + hr + " · BB " + bb; }
+        if (hr != null && stress != null) { return "LIVE · HR " + hr + " · STR " + stress; }
+        if (hr != null) { return "LIVE · HR " + hr; }
+        if (bb != null) { return "LIVE · BB " + bb; }
+        if (stress != null) { return "LIVE · STRESS " + stress; }
+        return "";
+    }
+
+    function setSensorClueForTest(clue as String) as Void {
+        _sensorClue = clue;
+    }
+
     function refresh() as Void {
         _active = true; _loaded = true; _page = 0; _pendingAccept = null;
         if (!_service.hasServer()) { _stage = :unconfigured; }
         else if (!_service.hasToken()) { _stage = :unpaired; }
         else {
             _stage = :loading; _message = "Finding your next little escape...";
-            _service.suggestions(method(:handleSuggestions));
+            _sensorClue = computeSensorClue();
+            if (!_checkInMood.equals("unknown")) {
+                _service.suggestionsWithMood(_checkInMood, method(:handleSuggestions));
+            } else {
+                _service.suggestions(method(:handleSuggestions));
+            }
         }
         WatchUi.requestUpdate();
     }
@@ -90,6 +115,7 @@ class MomoCalendarView extends MomoLegacyCalendarView {
 
     function actionChoices() as Array<Dictionary> {
         return [{"id" => :accept, "label" => "Let's go", "detail" => "Review & save this break"},
+            {"id" => :mood, "label" => "How I feel", "detail" => "Fried, Okay, or Wired"},
             {"id" => :snooze, "label" => "Later", "detail" => "Give me breathing room"},
             {"id" => :alternative, "label" => "Something else", "detail" => "Find a different idea"},
             {"id" => :why, "label" => "Why this?", "detail" => "What Momo considered"},
@@ -98,9 +124,24 @@ class MomoCalendarView extends MomoLegacyCalendarView {
 
     function onAction(id as Symbol) as Void {
         if (id == :accept) { requestAccept(); }
+        else if (id == :mood) { openMoodPicker(); }
         else if (id == :snooze) { decide("snooze"); }
         else if (id == :alternative) { decide("alternative"); }
         else { showDetails(id == :profile); }
+    }
+
+    function openMoodPicker() as Void {
+        var moods = new MomoChoiceView("How do you feel?", [
+            {"id" => :fried, "label" => "Fried", "detail" => "Low battery, need gentle"},
+            {"id" => :okay, "label" => "Okay", "detail" => "Steady, open to a reset"},
+            {"id" => :wired, "label" => "Wired", "detail" => "Restless, need to move"}
+        ], method(:onMoodSelected));
+        WatchUi.pushView(moods, new MomoChoiceDelegate(moods), WatchUi.SLIDE_LEFT);
+    }
+
+    function onMoodSelected(id as Symbol) as Void {
+        _checkInMood = id == :fried ? "fried" : (id == :wired ? "wired" : "okay");
+        refresh();
     }
 
     function showDetails(profile as Boolean) as Void {
@@ -201,18 +242,36 @@ class MomoCalendarView extends MomoLegacyCalendarView {
         MomoUi.clear(dc); MomoUi.heading(dc, "A little escape");
         var badge = _source.equals("grok") ? "GROK" : "SCRIPTED";
         badge += _mode.equals("demo") ? " / DEMO" : " / CALENDAR";
-        MomoUi.text(dc, badge, 58, MomoUi.MINT);
+        MomoUi.text(dc, badge, 56, MomoUi.MINT);
         var hint = "START: refresh";
         if (_stage == :ready && _idea != null) {
             if (_page == 0) {
-                MomoUi.text(dc, _idea["title"] as String, 89, MomoUi.INK);
-                MomoUi.text(dc, _idea["label"] as String, 111, MomoUi.MUTED);
-                var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
-                MomoUi.paragraph(dc, quip, 131, 4, MomoUi.INK);
+                var clue = _sensorClue;
+                if (clue.length() == 0 && !_checkInMood.equals("unknown")) {
+                    clue = "MOOD · " + _checkInMood.toUpper();
+                }
+                if (clue.length() > 0) {
+                    MomoUi.text(dc, clue, 75, MomoUi.LAVENDER);
+                    MomoUi.text(dc, _idea["title"] as String, 95, MomoUi.INK);
+                    MomoUi.text(dc, _idea["label"] as String, 115, MomoUi.MUTED);
+                    var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
+                    MomoUi.paragraph(dc, quip, 135, 3, MomoUi.INK);
+                } else {
+                    MomoUi.text(dc, _idea["title"] as String, 89, MomoUi.INK);
+                    MomoUi.text(dc, _idea["label"] as String, 111, MomoUi.MUTED);
+                    var quip = _idea["quip"] instanceof String ? _idea["quip"] as String : "A little space for yourself?";
+                    MomoUi.paragraph(dc, quip, 131, 4, MomoUi.INK);
+                }
             } else if (_page == 1) {
-                MomoUi.text(dc, "WHY THIS BREAK?", 91, MomoUi.MINT);
+                MomoUi.text(dc, "WHY THIS BREAK?", 88, MomoUi.MINT);
                 var reason = _idea["reason"] instanceof String ? _idea["reason"] as String : "This fits your free time and preferences.";
-                MomoUi.paragraph(dc, reason, 123, 4, MomoUi.INK);
+                var coachLine = _idea["coachLine"] instanceof String ? _idea["coachLine"] as String : "";
+                if (coachLine.length() > 0) {
+                    MomoUi.paragraph(dc, reason, 114, 2, MomoUi.INK);
+                    MomoUi.paragraph(dc, coachLine, 162, 2, MomoUi.GOLD);
+                } else {
+                    MomoUi.paragraph(dc, reason, 121, 4, MomoUi.INK);
+                }
             } else {
                 MomoUi.text(dc, "MAKE IT YOURS", 91, MomoUi.MINT);
                 MomoUi.paragraph(dc, "Using default preferences. Choose Setup to tell Momo what works for you.", 123, 4, MomoUi.INK);
@@ -233,7 +292,7 @@ class MomoCalendarView extends MomoLegacyCalendarView {
         } else {
             MomoUi.paragraph(dc, _message, 103, 4, MomoUi.INK);
             if (_stage == :loading) { hint = "One moment..."; }
-            else if (_pendingAccept != null) { hint = "START: retry"; }
+            else if (_pendingAccept != null) { hint = "START: retry safely"; }
         }
         MomoUi.pill(dc, hint, 215);
     }

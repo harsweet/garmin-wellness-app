@@ -9,6 +9,10 @@ module MomoUi {
     const MUTED = 0xAAAAAA;
     const EDGE = 0x555555;
     const SURFACE = 0x005555;
+    const LAVENDER = 0xAAAAFF;
+    const GOLD = 0xFFFF55;
+    const PEACH = 0xFFAA55;
+    const CORAL = 0xFF5555;
 
     function clear(dc as Graphics.Dc) as Void {
         dc.setColor(INK, BG); dc.clear();
@@ -83,5 +87,53 @@ module MomoUi {
         dc.setColor(MINT, SURFACE);
         dc.drawRoundedRectangle(62, top, 136, 27, 10);
         dc.drawText(130, top + 3, Graphics.FONT_XTINY, fit(dc, label, Graphics.FONT_XTINY, 124), Graphics.TEXT_JUSTIFY_CENTER);
+    }
+
+    function drawProgressBar(dc as Graphics.Dc, x as Number, y as Number, width as Number, height as Number, progress as Float, color as Number) as Void {
+        var clamped = progress < 0.0f ? 0.0f : (progress > 1.0f ? 1.0f : progress);
+        var radius = (height / 2).toNumber();
+        dc.setColor(EDGE, BG);
+        dc.fillRoundedRectangle(x, y, width, height, radius);
+        var fill = (width * clamped).toNumber();
+        if (fill > 0) {
+            if (fill < height) { fill = height; }
+            dc.setColor(color, BG);
+            dc.fillRoundedRectangle(x, y, fill, height, radius);
+        }
+    }
+
+    function drawBezelProgress(dc as Graphics.Dc, progress as Float, color as Number) as Void {
+        var clamped = progress < 0.0f ? 0.0f : (progress > 1.0f ? 1.0f : progress);
+        dc.setPenWidth(4);
+        dc.setColor(EDGE, BG);
+        dc.drawCircle(130, 130, 124);
+        var span = (360.0f * clamped).toNumber();
+        if (span >= 360) {
+            dc.setColor(color, BG);
+            dc.drawCircle(130, 130, 124);
+        } else if (span > 0) {
+            var endAngle = (90 - span + 360) % 360;
+            dc.setColor(color, BG);
+            dc.drawArc(130, 130, 124, Graphics.ARC_CLOCKWISE, 90, endAngle);
+        }
+        dc.setPenWidth(1);
+    }
+
+    function drawSparkles(dc as Graphics.Dc, frame as Number) as Void {
+        var points = [
+            [42, 82], [218, 82],
+            [28, 130], [232, 130],
+            [48, 186], [212, 186],
+            [74, 48], [186, 48]
+        ] as Array<Array<Number>>;
+        var colors = [GOLD, MINT, PEACH, LAVENDER] as Array<Number>;
+        dc.setColor(SURFACE, BG);
+        dc.drawCircle(130, 130, 122);
+        for (var i = 0; i < points.size(); i += 1) {
+            var pt = points[i];
+            var r = ((frame + i) % 3 == 0) ? 3 : 2;
+            dc.setColor(colors[(i + frame) % colors.size()], BG);
+            dc.fillCircle(pt[0], pt[1], r);
+        }
     }
 }

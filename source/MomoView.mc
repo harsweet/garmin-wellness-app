@@ -1,5 +1,6 @@
 import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.Timer;
 import Toybox.WatchUi;
 
 class MomoView extends WatchUi.View {
@@ -7,6 +8,14 @@ class MomoView extends WatchUi.View {
     private var _bitmap as Graphics.BitmapType or Null = null;
     private var _loadedPhase as Number = -1;
     private var _help as Boolean = false;
+    private var _timer as Timer.Timer or Null = null;
+    private var _animStep as Number = 0;
+    private var _tickCount as Number = 0;
+    private var _cachedHr as Number or Null = null;
+    private var _cachedSteps as Number or Null = null;
+    private var _cachedBb as Number or Null = null;
+    private var _breaksToday as Number = 0;
+    private var _contextLoaded as Boolean = false;
 
     const BG = 0x000000;
     const MUTED = 0xAAAAAA;
@@ -20,18 +29,101 @@ class MomoView extends WatchUi.View {
         return _help;
     }
 
+    function getAnimStep() as Number {
+        return _animStep;
+    }
+
     function toggleHelp() as Void {
         _help = !_help;
         WatchUi.requestUpdate();
     }
 
     function refresh() as Void {
+        refreshContextCache();
         WatchUi.requestUpdate();
     }
 
+    function onShow() as Void {
+        refreshContextCache();
+        startAnimTimer();
+    }
+
     function onHide() as Void {
+        stopAnimTimer();
         _bitmap = null;
         _loadedPhase = -1;
+    }
+
+    function onAnimTick() as Void {
+        _animStep = (_animStep + 1) % 8;
+        _tickCount += 1;
+        if (_tickCount % 10 == 0) {
+            refreshContextCache();
+        }
+        WatchUi.requestUpdate();
+    }
+
+    private function startAnimTimer() as Void {
+        stopAnimTimer();
+        _timer = new Timer.Timer();
+        _timer.start(method(:onAnimTick), 450, true);
+    }
+
+    private function stopAnimTimer() as Void {
+        if (_timer != null) {
+            _timer.stop();
+            _timer = null;
+        }
+    }
+
+    function refreshContextCache() as Void {
+        var activity = MomoSensors.readActivityInfo();
+        _cachedSteps = activity["steps"] as Number or Null;
+        _cachedHr = MomoSensors.readHeartRate();
+        _cachedBb = MomoSensors.readBodyBattery();
+        _breaksToday = MomoModel.getBreaksToday();
+        _contextLoaded = true;
+    }
+
+    function setContextForTest(hr as Number or Null, steps as Number or Null, bb as Number or Null, breaksToday as Number) as Void {
+        _cachedHr = hr;
+        _cachedSteps = steps;
+        _cachedBb = bb;
+        _breaksToday = breaksToday;
+        _contextLoaded = true;
+    }
+
+    function statusBanner() as String {
+        if (!_contextLoaded) {
+            refreshContextCache();
+        }
+        var stepStr = null as String or Null;
+        if (_cachedSteps != null) {
+            var s = _cachedSteps as Number;
+            stepStr = s >= 1000 ? (s / 1000.0f).format("%.1f") + "k" : s.toString();
+        }
+        if (_cachedHr != null && stepStr != null) {
+            return "HR " + _cachedHr + " · " + stepStr + " steps";
+        }
+        if (_cachedBb != null && _breaksToday > 0) {
+            return "BB " + _cachedBb + " · " + _breaksToday + (_breaksToday == 1 ? " break" : " breaks");
+        }
+        if (_cachedHr != null && _breaksToday > 0) {
+            return "HR " + _cachedHr + " · " + _breaksToday + (_breaksToday == 1 ? " break" : " breaks");
+        }
+        if (_cachedHr != null) {
+            return "HR " + _cachedHr + " · " + _model.getTitle();
+        }
+        if (_cachedBb != null) {
+            return "BB " + _cachedBb + " · " + _model.getTitle();
+        }
+        if (stepStr != null) {
+            return stepStr + " steps · " + _model.getTitle();
+        }
+        if (_breaksToday > 0) {
+            return _breaksToday + (_breaksToday == 1 ? " break" : " breaks") + " · " + _model.getTitle();
+        }
+        return "DEMO / " + _model.getTitle();
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -43,6 +135,12 @@ class MomoView extends WatchUi.View {
             return;
         }
 
+        if (!_contextLoaded) {
+            refreshContextCache();
+        } else {
+            _breaksToday = MomoModel.getBreaksToday();
+        }
+
         if (_loadedPhase != _model.getPhase()) {
             // Hold only one mood bitmap in memory at a time.
             _bitmap = null;
@@ -50,22 +148,39 @@ class MomoView extends WatchUi.View {
             _loadedPhase = _model.getPhase();
         }
 
+        var breath = _animStep <= 4 ? _animStep : 8 - _animStep;
+        var bobOffsets = [0, -1, -2, -1, 0, 1, 1, 0] as Array<Number>;
+        var bob = bobOffsets[_animStep];
+
         // The source images stay unchanged. A clipped viewport frames the mascot.
         dc.setClip(30, 64, 200, 100);
+        dc.setColor(MomoUi.SURFACE, BG);
+        dc.drawCircle(130, 114, 42 + breath);
+        dc.setPenWidth(2);
+        dc.setColor(_model.getAccent(), BG);
+        dc.drawArc(130, 114, 46 + breath, Graphics.ARC_COUNTER_CLOCKWISE, 148, 212);
+        dc.drawArc(130, 114, 46 + breath, Graphics.ARC_COUNTER_CLOCKWISE, 328, 32);
+        dc.setPenWidth(1);
+
         if (_bitmap != null) {
-            dc.drawBitmap(_model.getImageX(), _model.getImageY(), _bitmap);
+            dc.drawBitmap(_model.getImageX(), _model.getImageY() + bob, _bitmap);
+        }
+
+        if (_breaksToday > 0) {
+            dc.setColor(MomoUi.GOLD, BG);
+            dc.fillCircle(206, 78, 10);
+            dc.setColor(BG, MomoUi.GOLD);
+            dc.drawText(206, 68, Graphics.FONT_XTINY, _breaksToday > 9 ? "9+" : _breaksToday.toString(), Graphics.TEXT_JUSTIFY_CENTER);
         }
         dc.setClip(0, 0, dc.getWidth(), dc.getHeight());
 
         dc.setColor(Graphics.COLOR_WHITE, BG);
         dc.drawText(130, 16, Graphics.FONT_SMALL, "momo", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(_model.getAccent(), BG);
-        MomoUi.text(dc, "DEMO / " + _model.getTitle(), 45, _model.getAccent());
+        MomoUi.text(dc, statusBanner(), 45, _model.getAccent());
 
         dc.setColor(Graphics.COLOR_WHITE, BG);
         drawRemark(dc, _model.getRemark());
 
-        // Three touch targets match the three demo phases; no invented health score.
         for (var i = 0; i < _model.PHASE_COUNT; i += 1) {
             dc.setColor(i == _model.getPhase() ? _model.getAccent() : 0x555555, BG);
             if (i == _model.getPhase()) {

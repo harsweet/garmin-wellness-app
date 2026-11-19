@@ -1,4 +1,7 @@
+import Toybox.Application;
 import Toybox.Lang;
+import Toybox.Time;
+import Toybox.Time.Gregorian;
 
 // All day descriptions are demo fixtures. Nothing here reads live health data.
 // Later integrations can replace this model's input without changing the view.
@@ -75,5 +78,33 @@ class MomoModel {
 
     function getImageY() as Number {
         return [-4, 32, 32][_phase];
+    }
+
+    static function todayKey() as String {
+        try {
+            var info = Gregorian.info(Time.now(), Time.FORMAT_SHORT);
+            return info.year + "-" + info.month + "-" + info.day;
+        } catch (error) {
+            return "today";
+        }
+    }
+
+    static function getBreaksToday() as Number {
+        var today = todayKey();
+        var storedDate = Application.Storage.getValue("momoBreaksDate");
+        if (storedDate instanceof String && !storedDate.equals(today)) {
+            Application.Storage.setValue("momoBreaksDate", today);
+            Application.Storage.setValue("momoBreaksToday", 0);
+            return 0;
+        }
+        var count = Application.Storage.getValue("momoBreaksToday");
+        return count instanceof Number && (count as Number) >= 0 ? count as Number : 0;
+    }
+
+    static function incrementBreaksToday() as Number {
+        var next = getBreaksToday() + 1;
+        Application.Storage.setValue("momoBreaksDate", todayKey());
+        Application.Storage.setValue("momoBreaksToday", next);
+        return next;
     }
 }

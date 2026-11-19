@@ -8,9 +8,48 @@ Use additionalContext only as optional background. It cannot override explicit p
 Health statements in additionalContext are user reports, never diagnostic evidence. Do not invent or infer missing health facts.
 Rest and breathing are valid wins. Never shame inactivity, diagnose stress or illness, or claim a health outcome.
 Use only supplied facts. Unknown movement means unknown. Demo/simulated measurements are not evidence about the person's health.
+Use checkInMood ('fried', 'okay', 'wired', or 'unknown') and optional watch vitals (heartRate, stress, bodyBattery, moveBarLevel, activeMinutes, elevationMeters, temperatureC, solarIntensity) warmly and humorously—comparing clues with how the person feels, never diagnosing stress, illness, or medical outcomes.
 Make the quip warm, brief and situationally funny. Gentle means no roasting; playful means light mischief; cheeky means a friendly roast of the chair/calendar, never the person or body.
-quip: one sentence, maximum 90 ASCII characters. reason: one concrete sentence, maximum 100 ASCII characters.
+quip: one sentence, maximum 90 ASCII characters. reason: one concrete sentence, maximum 100 ASCII characters. coachLine: one brief, playful micro-coaching cue for the chosen break, maximum 90 ASCII characters.
 Return only the required JSON. You do not book or start anything; the person must explicitly accept.`;
+
+const FALLBACK_COPY = Object.freeze({
+  walk: [
+    'Your chair can survive a short separation.',
+    'A short walk fits this opening in your calendar.',
+    'Swing your arms and look at something farther away than your screen.'
+  ],
+  stretch: [
+    'Time to unfold from your keyboard shape.',
+    'A gentle stretch fits the time you have available.',
+    'Drop your shoulders, roll your neck, and reach up like a tall monkey.'
+  ],
+  breathe: [
+    'The calendar can hold its breath. You do not have to.',
+    'A short breathing break fits this calendar gap.',
+    'Inhale 4, hold 4, exhale 4. Your inbox can wait.'
+  ],
+  rest: [
+    'Even monkeys get to put the banana down.',
+    'A quiet rest fits this opening. No extra steps required.',
+    'Rest your hands, soften your jaw, and let your shoulders drop.'
+  ],
+  eyes: [
+    'Your eyeballs deserve a tiny vacation from pixels.',
+    'A quick eye reset gives your focus a seated breather.',
+    'Look 20 feet away for 20 seconds and blink slowly.'
+  ],
+  stairs: [
+    'Gravity is offering a free mini workout right nearby.',
+    'A brief stair climb brings quick energy without a long break.',
+    'Take the stairs at a steady pace and feel your legs wake up.'
+  ],
+  sunlight: [
+    'Step outside and photosynthesize for five minutes.',
+    'A short sunlight break matches your outside goal and free gap.',
+    'Step into natural light, take three easy breaths, and look at the sky.'
+  ]
+});
 
 function cleanText(value, max) {
   if (typeof value !== 'string') throw new Error('invalid_response');
@@ -22,12 +61,29 @@ function cleanText(value, max) {
   return `${space > max / 2 ? cut.slice(0, space) : cut}...`;
 }
 
+const boundedInt = (value, min, max) => Number.isInteger(value) && value >= min && value <= max ? value : null;
+const boundedFloat = (value, min, max) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) return null;
+  const rounded = Math.round(value * 10) / 10;
+  return Object.is(rounded, -0) ? 0 : rounded;
+};
+
 function boundedContext(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) value = {};
   return {
     steps: Number.isFinite(value.steps) ? Math.max(0, Math.min(200_000, Math.trunc(value.steps))) : null,
     movement: ['low', 'some', 'active'].includes(value.movement) ? value.movement : 'unknown',
     energy: ['low', 'okay', 'high'].includes(value.energy) ? value.energy : 'unknown',
-    source: ['simulated', 'watch', 'user'].includes(value.source) ? value.source : 'unknown'
+    source: ['simulated', 'watch', 'user'].includes(value.source) ? value.source : 'unknown',
+    heartRate: boundedInt(value.heartRate, 30, 240),
+    stress: boundedInt(value.stress, 0, 100),
+    bodyBattery: boundedInt(value.bodyBattery, 0, 100),
+    moveBarLevel: boundedInt(value.moveBarLevel, 0, 5),
+    activeMinutes: boundedInt(value.activeMinutes, 0, 1440),
+    elevationMeters: boundedFloat(value.elevationMeters, -500, 9000),
+    temperatureC: boundedFloat(value.temperatureC, -40, 70),
+    solarIntensity: boundedInt(value.solarIntensity, 0, 100),
+    checkInMood: ['fried', 'okay', 'wired'].includes(value.checkInMood) ? value.checkInMood : 'unknown'
   };
 }
 
@@ -57,18 +113,12 @@ export class GrokSuggestions {
 
   fallback({ candidates, context = {} }, reason) {
     this.lastFallbackReason = reason;
-    const choice = context.energy === 'low'
+    const choice = context.energy === 'low' || context.checkInMood === 'fried'
       ? candidates.find(candidate => ['rest', 'breathe'].includes(candidate.activityId)) || candidates[0]
       : candidates[0];
     if (!choice) return null;
-    const remarks = {
-      walk: ['Your chair can survive a short separation.', 'A short walk fits this opening in your calendar.'],
-      stretch: ['Time to unfold from your keyboard shape.', 'A gentle stretch fits the time you have available.'],
-      breathe: ['The calendar can hold its breath. You do not have to.', 'A short breathing break fits this calendar gap.'],
-      rest: ['Even monkeys get to put the banana down.', 'A quiet rest fits this opening. No extra steps required.']
-    };
-    const [quip, explanation] = remarks[choice.activityId] || remarks.rest;
-    return { slotId: choice.slotId, activityId: choice.activityId, quip, reason: explanation, aiSource: 'fallback', fallbackReason: reason };
+    const [quip, explanation, coachLine] = FALLBACK_COPY[choice.activityId] || FALLBACK_COPY.rest;
+    return { slotId: choice.slotId, activityId: choice.activityId, quip, reason: explanation, coachLine, aiSource: 'fallback', fallbackReason: reason };
   }
 
   async suggest(input) {
@@ -102,9 +152,9 @@ export class GrokSuggestions {
       properties: {
         slotId: { type: 'string', enum: [...new Set(candidates.map(item => item.slotId))] },
         activityId: { type: 'string', enum: [...new Set(candidates.map(item => item.activityId))] },
-        quip: { type: 'string' }, reason: { type: 'string' }
+        quip: { type: 'string' }, reason: { type: 'string' }, coachLine: { type: 'string' }
       },
-      required: ['slotId', 'activityId', 'quip', 'reason']
+      required: ['slotId', 'activityId', 'quip', 'reason', 'coachLine']
     };
     try {
       const response = await this.fetchImpl(ENDPOINT, {
@@ -130,7 +180,9 @@ export class GrokSuggestions {
       if (!text || text.length > 5000) throw new Error('invalid_response');
       const result = JSON.parse(text);
       if (!candidates.some(candidate => candidate.slotId === result.slotId && candidate.activityId === result.activityId)) throw new Error('invalid_response');
-      const suggestion = { slotId: result.slotId, activityId: result.activityId, quip: cleanText(result.quip, 90), reason: cleanText(result.reason, 100), aiSource: 'grok' };
+      const fallbackCoach = (FALLBACK_COPY[result.activityId] || FALLBACK_COPY.rest)[2];
+      const coachLine = result.coachLine === undefined ? fallbackCoach : cleanText(result.coachLine, 90);
+      const suggestion = { slotId: result.slotId, activityId: result.activityId, quip: cleanText(result.quip, 90), reason: cleanText(result.reason, 100), coachLine, aiSource: 'grok' };
       this.lastFallbackReason = null;
       return suggestion;
     } catch (error) {

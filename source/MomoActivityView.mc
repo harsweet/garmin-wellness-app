@@ -19,6 +19,15 @@ class MomoActivityView extends WatchUi.View {
     private var _pendingAction as String = "";
     private var _pendingHelpful as String = "";
     private var _message as String = "";
+    private var _animFrame as Number = 0;
+    private var _lastSavedSec as Number = -1;
+    private var _lastCueKey as Number = -1;
+    private var _startHr as Number or Null = null;
+    private var _startStress as Number or Null = null;
+    private var _startElevation as Number or Null = null;
+    private var _liveHr as Number or Null = null;
+    private var _liveElevation as Number or Null = null;
+    private var _endVitals as Dictionary or Null = null;
 
     function initialize(activity as Dictionary, mode as String) {
         View.initialize();
@@ -32,6 +41,12 @@ class MomoActivityView extends WatchUi.View {
             _started = saved["started"] == true;
             _completed = saved["completed"] == true;
             _proof = saved["proof"] instanceof Dictionary ? saved["proof"] as Dictionary : null;
+            if (saved["startVitals"] instanceof Dictionary) {
+                var sv = saved["startVitals"] as Dictionary;
+                _startHr = sv["hr"] instanceof Number ? sv["hr"] as Number : null;
+                _startStress = sv["stress"] instanceof Number ? sv["stress"] as Number : null;
+                _startElevation = sv["elevation"] instanceof Number ? sv["elevation"] as Number : null;
+            }
         }
         _tracker = new MomoActivityTracker(activity, progress);
         var status = activity["status"];
@@ -40,6 +55,9 @@ class MomoActivityView extends WatchUi.View {
             if (status.equals("completed")) { _started = true; _completed = true; }
         }
         _state = _completed ? :feedback : (_started ? :running : :scheduled);
+        if (_state == :running && _startHr == null && _startStress == null && _startElevation == null) {
+            captureStartVitals();
+        }
     }
 
     static function pending(origin as String) as Dictionary or Null {
@@ -52,7 +70,28 @@ class MomoActivityView extends WatchUi.View {
 
     function getState() as Symbol { return _state; }
     function getTracker() as MomoActivityTracker { return _tracker; }
+    function getProof() as Dictionary or Null { return _proof; }
     function setService(service as MomoCalendarClient) as Void { _client = service; }
+
+    function setStartVitalsForTest(hr as Number or Null, stress as Number or Null, elevation as Number or Null) as Void {
+        _startHr = hr;
+        _startStress = stress;
+        _startElevation = elevation;
+    }
+
+    private function captureStartVitals() as Void {
+        var snap = MomoSensors.vitalsSnapshot();
+        _startHr = snap["hr"] as Number or Null;
+        _startStress = snap["stress"] as Number or Null;
+        _startElevation = snap["elevation"] as Number or Null;
+        _liveHr = _startHr;
+        _liveElevation = _startElevation;
+    }
+
+    private function refreshLiveVitals() as Void {
+        _liveHr = MomoSensors.readHeartRate();
+        _liveElevation = MomoSensors.readElevation();
+    }
 
     function save() as Void {
         var record = _tracker.snapshot();
@@ -63,6 +102,7 @@ class MomoActivityView extends WatchUi.View {
         record["started"] = _started;
         record["completed"] = _completed;
         record["proof"] = _proof;
+        record["startVitals"] = {"hr" => _startHr, "stress" => _startStress, "elevation" => _startElevation};
         Application.Storage.setValue("momoActivitySession", record);
     }
 
@@ -86,9 +126,10 @@ class MomoActivityView extends WatchUi.View {
     private function startTimer() as Void {
         stopTimer();
         _tracker.resume(System.getTimer(), MomoActivityTracker.readSteps());
+        refreshLiveVitals();
         if (_visible) {
             _timer = new Timer.Timer();
-            _timer.start(method(:tick), 1000, true);
+            _timer.start(method(:tick), 250, true);
         }
     }
 
@@ -98,9 +139,48 @@ class MomoActivityView extends WatchUi.View {
 
     function tick() as Void {
         if (!_visible || _state != :running) { return; }
+        _animFrame = (_animFrame + 1) % 32;
         _tracker.update(System.getTimer(), MomoActivityTracker.readSteps());
-        if (_tracker.elapsedSeconds() % 10 == 0) { save(); }
+        var sec = _tracker.elapsedSeconds();
+        if (sec % 10 == 0 && sec != _lastSavedSec) {
+            _lastSavedSec = sec;
+            save();
+        }
+        if (_animFrame % 8 == 0) {
+            refreshLiveVitals();
+        }
+        checkHapticCue();
         WatchUi.requestUpdate();
+    }
+
+    private function activityKind() as String {
+        var kind = _activity["activityId"];
+        return kind instanceof String ? kind as String : "rest";
+    }
+
+    private function checkHapticCue() as Void {
+        var kind = activityKind();
+        if (kind.equals("breathe")) {
+            var phase = ((_tracker.elapsedMs() % 12000) / 4000).toNumber();
+            if (phase != _lastCueKey) {
+                _lastCueKey = phase;
+                MomoSensors.vibrate(phase == 0 ? :inhale : (phase == 2 ? :exhale : :step));
+            }
+        } else if (kind.equals("stretch")) {
+            var stepIdx = (_tracker.elapsedSeconds() / 30).toNumber() % 6;
+            if (stepIdx != _lastCueKey) {
+                _lastCueKey = stepIdx;
+                MomoSensors.vibrate(:step);
+            }
+        } else if (kind.equals("eyes")) {
+            var stepLen = (_tracker.durationSeconds() / 4).toNumber();
+            if (stepLen < 15) { stepLen = 15; }
+            var eyeIdx = (_tracker.elapsedSeconds() / stepLen).toNumber() % 4;
+            if (eyeIdx != _lastCueKey) {
+                _lastCueKey = eyeIdx;
+                MomoSensors.vibrate(:step);
+            }
+        }
     }
 
     function select() as Void {
@@ -158,7 +238,18 @@ class MomoActivityView extends WatchUi.View {
         if (_tracker.goalMet()) {
             source = _tracker.tracking().equals("steps") ? (_mode.equals("demo") ? "simulated_steps" : "steps") : (simulate ? "simulated_timer" : "timer");
         }
+        var endSnap = MomoSensors.vitalsSnapshot();
+        var vitals = {} as Dictionary;
+        if (_startHr != null) { vitals["startHr"] = _startHr; }
+        if (endSnap["hr"] instanceof Number) { vitals["endHr"] = endSnap["hr"]; }
+        if (_startStress != null) { vitals["startStress"] = _startStress; }
+        if (endSnap["stress"] instanceof Number) { vitals["endStress"] = endSnap["stress"]; }
+        if (_startElevation != null && endSnap["elevation"] instanceof Number) {
+            vitals["elevationGain"] = (endSnap["elevation"] as Number) - (_startElevation as Number);
+        }
+        _endVitals = vitals.size() > 0 ? vitals : null;
         _proof = {"source" => source, "steps" => _tracker.steps(), "elapsedSeconds" => _tracker.elapsedSeconds()};
+        if (_endVitals != null) { _proof["vitals"] = _endVitals; }
         _pendingAction = "complete";
         save();
         sendCompletion();
@@ -169,7 +260,7 @@ class MomoActivityView extends WatchUi.View {
         stopTimer();
         _tracker.pause();
         _state = :saving;
-        _client.completeActivity(_activity["id"] as String, _proof["source"] as String, _proof["steps"] as Number, _proof["elapsedSeconds"] as Number, method(:handleCompleted));
+        _client.completeActivityWithVitals(_activity["id"] as String, _proof["source"] as String, _proof["steps"] as Number, _proof["elapsedSeconds"] as Number, _endVitals, method(:handleCompleted));
         WatchUi.requestUpdate();
     }
 
@@ -187,6 +278,8 @@ class MomoActivityView extends WatchUi.View {
             _started = true;
             _state = :running;
             _pendingAction = "";
+            _lastCueKey = -1;
+            captureStartVitals();
             save();
             if (_visible) { startTimer(); }
         } else { showError(data); }
@@ -199,6 +292,8 @@ class MomoActivityView extends WatchUi.View {
             _completed = true;
             _state = :feedback;
             _pendingAction = "";
+            MomoModel.incrementBreaksToday();
+            MomoSensors.vibrate(:celebrate);
             save();
         } else { showError(data); }
         WatchUi.requestUpdate();
@@ -219,9 +314,27 @@ class MomoActivityView extends WatchUi.View {
         _message = data != null && data["message"] instanceof String ? data["message"] as String : "Connection paused. START retries safely.";
     }
 
+    private function computeProgress() as Float {
+        var duration = _tracker.durationSeconds();
+        var progress = duration > 0 ? _tracker.elapsedSeconds().toFloat() / duration.toFloat() : 1.0f;
+        if (_tracker.tracking().equals("steps") && _tracker.targetSteps() > 0) {
+            var stepProgress = _tracker.steps().toFloat() / _tracker.targetSteps().toFloat();
+            if (stepProgress < progress) { progress = stepProgress; }
+        }
+        if (progress < 0.0f) { progress = 0.0f; }
+        if (progress > 1.0f) { progress = 1.0f; }
+        return progress;
+    }
+
+    private function formatClock(remaining as Number) as String {
+        var clamped = remaining < 0 ? 0 : remaining;
+        var seconds = clamped % 60;
+        return (clamped / 60).toNumber() + ":" + (seconds < 10 ? "0" : "") + seconds;
+    }
+
     function onUpdate(dc as Graphics.Dc) as Void {
         MomoUi.clear(dc); MomoUi.heading(dc, "Your break");
-        MomoUi.text(dc, _mode.equals("demo") ? "SIMULATED / DEMO" : "ACTIVITY SESSION", 58, MomoUi.MINT);
+        MomoUi.text(dc, _mode.equals("demo") ? "SIMULATED / DEMO" : "ACTIVITY SESSION", 56, MomoUi.MINT);
         var hint = "START: options";
         var title = _activity["title"] instanceof String ? _activity["title"] as String : "A little space for you";
         if (_state == :scheduled) {
@@ -230,29 +343,118 @@ class MomoActivityView extends WatchUi.View {
             MomoUi.paragraph(dc, label, 153, 2, MomoUi.MUTED);
             hint = "START: begin";
         } else if (_state == :running) {
-            MomoUi.text(dc, title, 90, MomoUi.INK);
             var remaining = _tracker.durationSeconds() - _tracker.elapsedSeconds();
-            if (remaining < 0) { remaining = 0; }
-            var seconds = remaining % 60;
-            var clock = (remaining / 60).toNumber() + ":" + (seconds < 10 ? "0" : "") + seconds;
-            dc.setColor(MomoUi.INK, MomoUi.BG);
-            dc.drawText(130, 115, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
-            var detail = _tracker.tracking().equals("steps") ? _tracker.steps() + " / " + _tracker.targetSteps() + " steps" : "Breathe. You've got time.";
-            MomoUi.text(dc, detail, 170, MomoUi.MUTED);
-            var progress = _tracker.elapsedSeconds().toFloat() / _tracker.durationSeconds();
-            if (_tracker.tracking().equals("steps") && _tracker.targetSteps() > 0) {
-                var stepProgress = _tracker.steps().toFloat() / _tracker.targetSteps();
-                if (stepProgress < progress) { progress = stepProgress; }
+            var clock = formatClock(remaining);
+            var progress = computeProgress();
+            var kind = activityKind();
+            var coachLine = _activity["coachLine"] instanceof String ? _activity["coachLine"] as String : "";
+
+            if (kind.equals("breathe")) {
+                MomoUi.drawBezelProgress(dc, progress, MomoUi.MINT);
+                var cycleMs = _tracker.elapsedMs() % 12000;
+                var phase = (cycleMs / 4000).toNumber();
+                var phaseFrac = (cycleMs % 4000).toFloat() / 4000.0f;
+                var radius = 28;
+                var phaseLabel = "INHALE";
+                var ringColor = MomoUi.MINT;
+                if (phase == 0) {
+                    radius = 28 + (26 * phaseFrac).toNumber();
+                } else if (phase == 1) {
+                    radius = 52 + ((_animFrame % 4) < 2 ? 2 : 0);
+                    phaseLabel = "HOLD";
+                    ringColor = MomoUi.GOLD;
+                } else {
+                    radius = 54 - (26 * phaseFrac).toNumber();
+                    phaseLabel = "EXHALE";
+                    ringColor = MomoUi.LAVENDER;
+                }
+                dc.setColor(MomoUi.EDGE, MomoUi.BG);
+                dc.drawCircle(130, 134, 56);
+                dc.setPenWidth(4);
+                dc.setColor(ringColor, MomoUi.BG);
+                dc.drawCircle(130, 134, radius);
+                dc.setPenWidth(1);
+                dc.setColor(ringColor, MomoUi.BG);
+                dc.drawText(130, 110, Graphics.FONT_XTINY, phaseLabel, Graphics.TEXT_JUSTIFY_CENTER);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(130, 132, Graphics.FONT_SMALL, clock, Graphics.TEXT_JUSTIFY_CENTER);
+            } else if (kind.equals("stretch")) {
+                MomoUi.drawBezelProgress(dc, progress, MomoUi.PEACH);
+                var stepsList = [
+                    "Roll shoulders back",
+                    "Gentle neck tilt",
+                    "Reach for the sky",
+                    "Unclench jaw & hands",
+                    "Wrist circles",
+                    "Deep sigh & shake"
+                ] as Array<String>;
+                var stepIdx = (_tracker.elapsedSeconds() / 30).toNumber() % 6;
+                MomoUi.text(dc, "STEP " + (stepIdx + 1) + "/6", 82, MomoUi.PEACH);
+                MomoUi.paragraph(dc, stepsList[stepIdx], 106, 2, MomoUi.INK);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(130, 150, Graphics.FONT_MEDIUM, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, MomoUi.PEACH);
+            } else if (kind.equals("eyes")) {
+                MomoUi.drawBezelProgress(dc, progress, MomoUi.LAVENDER);
+                var eyeSteps = [
+                    "Look 20 ft away",
+                    "Slow blink x5",
+                    "Soften shoulders",
+                    "Rest eyes closed"
+                ] as Array<String>;
+                var stepLen = (_tracker.durationSeconds() / 4).toNumber();
+                if (stepLen < 15) { stepLen = 15; }
+                var eyeIdx = (_tracker.elapsedSeconds() / stepLen).toNumber() % 4;
+                var pulse = (_animFrame % 8) < 4 ? (_animFrame % 4) : (4 - (_animFrame % 4));
+                dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+                dc.drawArc(130, 136, 48 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 20, 160);
+                dc.setColor(MomoUi.LAVENDER, MomoUi.BG);
+                dc.drawArc(130, 136, 38 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 35, 145);
+                MomoUi.text(dc, "20-20-20 EYE BREAK", 80, MomoUi.LAVENDER);
+                MomoUi.paragraph(dc, eyeSteps[eyeIdx], 108, 2, MomoUi.INK);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(130, 154, Graphics.FONT_MEDIUM, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, MomoUi.LAVENDER);
+            } else if (kind.equals("walk") || kind.equals("stairs") || kind.equals("sunlight")) {
+                var arcColor = kind.equals("sunlight") ? MomoUi.GOLD : (kind.equals("stairs") ? MomoUi.PEACH : MomoUi.MINT);
+                MomoUi.drawBezelProgress(dc, progress, arcColor);
+                MomoUi.text(dc, title, 82, MomoUi.INK);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(130, 104, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                var metric = _tracker.tracking().equals("steps")
+                    ? _tracker.steps() + " / " + _tracker.targetSteps() + " steps"
+                    : (kind.equals("stairs") && _liveElevation != null
+                        ? "Elev " + _liveElevation + "m"
+                        : (kind.equals("sunlight") ? "Step into daylight" : _tracker.steps() + " steps"));
+                if (_liveHr != null) { metric += " · HR " + _liveHr; }
+                MomoUi.text(dc, metric, 152, arcColor);
+                var cue = coachLine.length() > 0
+                    ? coachLine
+                    : (kind.equals("stairs") ? "One flight at a time." : (kind.equals("sunlight") ? "Soak in a little daylight." : "Light steps. Unplug a bit."));
+                MomoUi.text(dc, cue, 173, MomoUi.MUTED);
+                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, arcColor);
+            } else {
+                MomoUi.drawBezelProgress(dc, progress, MomoUi.LAVENDER);
+                var pulse = (_animFrame % 8) < 4 ? (_animFrame % 4) : (4 - (_animFrame % 4));
+                dc.setColor(MomoUi.SURFACE, MomoUi.BG);
+                dc.drawCircle(130, 134, 46 + pulse);
+                dc.setColor(MomoUi.LAVENDER, MomoUi.BG);
+                dc.drawArc(130, 134, 38 + pulse, Graphics.ARC_COUNTER_CLOCKWISE, 195, 345);
+                MomoUi.text(dc, title, 82, MomoUi.LAVENDER);
+                dc.setColor(MomoUi.INK, MomoUi.BG);
+                dc.drawText(130, 114, Graphics.FONT_LARGE, clock, Graphics.TEXT_JUSTIFY_CENTER);
+                var restCue = coachLine.length() > 0 ? coachLine : "Quiet rest. Shoulders down.";
+                MomoUi.text(dc, restCue, 168, MomoUi.MUTED);
+                MomoUi.drawProgressBar(dc, 52, 197, 156, 4, progress, MomoUi.LAVENDER);
             }
-            if (progress > 1) { progress = 1; }
-            dc.setColor(MomoUi.EDGE, MomoUi.BG); dc.fillRoundedRectangle(52, 197, 156, 4, 2);
-            if (progress > 0) { dc.setColor(MomoUi.MINT, MomoUi.BG); dc.fillRoundedRectangle(52, 197, (156 * progress).toNumber(), 4, 2); }
             if (_tracker.goalMet()) { hint = "START: finish"; }
         } else if (_state == :feedback) {
+            MomoUi.drawSparkles(dc, _animFrame);
             MomoUi.text(dc, "TINY HIGH-FIVE!", 94, MomoUi.MINT);
             MomoUi.paragraph(dc, "You made room for yourself. How did that feel?", 128, 3, MomoUi.INK);
             hint = "START: tell Momo";
         } else if (_state == :done) {
+            MomoUi.drawSparkles(dc, _animFrame);
             MomoUi.text(dc, "NOTED, HUMAN.", 94, MomoUi.MINT);
             MomoUi.paragraph(dc, _message, 128, 3, MomoUi.INK);
             hint = "START: back";

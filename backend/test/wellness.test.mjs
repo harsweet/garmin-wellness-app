@@ -481,3 +481,163 @@ test('additional context changes invalidate cached suggestions and reach the nex
   assert.equal(inputs.length, 2);
   assert.equal(inputs[1].profile.additionalContext, additionalContext);
 });
+
+test('expanded catalog supports 7 activities and seatedOnly excludes all standing activities', () => {
+  assert.throws(() => validateProfile({ seatedOnly: true, preferredActivities: ['walk', 'stairs', 'sunlight'] }), /exclude every/);
+  const seated = validateProfile({ seatedOnly: true, preferredActivities: ['eyes', 'stairs', 'sunlight'] });
+  assert.deepEqual(seated.preferredActivities, ['eyes', 'stairs', 'sunlight']);
+  const { calendar, service } = fixture();
+  const avail = calendar.availability();
+  const candidates = service.candidates(avail, { movement: 'unknown', energy: 'unknown', checkInMood: 'unknown' });
+  const ids = [...new Set(candidates.map(c => c.activityId))];
+  assert.deepEqual(ids.sort(), ['breathe', 'eyes', 'rest', 'stairs', 'stretch', 'sunlight', 'walk']);
+});
+
+test('candidate scoring honors checkInMood, solarIntensity, and moveBarLevel while keeping defaults intact', async () => {
+  const { calendar, service } = fixture();
+  const avail = calendar.availability();
+
+  // Default profile + unknown context keeps walk #1
+  const def = service.candidates(avail, { movement: 'unknown', energy: 'unknown', checkInMood: 'unknown' });
+  assert.equal(def[0].activityId, 'walk');
+
+  // Fried mood prioritizes rest/breathe (+5) then eyes (+2) ahead of stretch (0) and standing (-3)
+  const fried = service.candidates(avail, { movement: 'unknown', energy: 'unknown', checkInMood: 'fried' });
+  assert.ok(['rest', 'breathe'].includes(fried[0].activityId));
+  const eyesIdx = fried.findIndex(c => c.activityId === 'eyes');
+  const stretchIdx = fried.findIndex(c => c.activityId === 'stretch');
+  assert.ok(eyesIdx >= 0 && eyesIdx < stretchIdx);
+
+  // Wired mood boosts breathe/walk/stairs; with breaks-only goal, breathe/walk/stairs beat stretch/rest/eyes/sunlight
+  await service.saveProfile({ goals: ['breaks'] });
+  const wired = service.candidates(avail, { movement: 'unknown', energy: 'unknown', checkInMood: 'wired' });
+  assert.ok(['breathe', 'walk', 'stairs'].includes(wired[0].activityId));
+
+  // Solar intensity >= 20 + outside goal boosts sunlight (+1), still behind walk (+2)
+  await service.saveProfile({ goals: ['outside'], preferredActivities: ['walk', 'sunlight', 'rest'] });
+  const sunny = service.candidates(avail, { movement: 'unknown', energy: 'unknown', checkInMood: 'unknown', solarIntensity: 45 });
+  const sunnyOrder = [...new Set(sunny.map(c => c.activityId))];
+  assert.deepEqual(sunnyOrder, ['walk', 'sunlight', 'rest']);
+
+  // Move bar level >= 3 boosts walk, stretch, stairs (+1)
+  await service.saveProfile({ goals: ['breaks'], preferredActivities: ['stretch', 'rest'] });
+  const moveBar = service.candidates(avail, { movement: 'unknown', energy: 'unknown', checkInMood: 'unknown', moveBarLevel: 3 });
+  assert.equal(moveBar[0].activityId, 'stretch');
+});
+
+test('checkInMood busts cache while sensor vital jitter reuses cached suggestion', async () => {
+  const { calendar } = fixture();
+  let calls = 0;
+  const provider = {
+    isConfigured: () => true,
+    async suggest({ candidates }) {
+      calls += 1;
+      return { ...candidates[0], quip: 'Quick pause.', reason: 'Fits your gap.', coachLine: 'Breathe steady.', aiSource: 'grok' };
+    }
+  };
+  const service = new WellnessService(calendar, { suggestionProvider: provider });
+  const first = await service.suggestions({ context: { source: 'watch', checkInMood: 'okay', heartRate: 72, stress: 30, solarIntensity: 10 } });
+  const jitter = await service.suggestions({ context: { source: 'watch', checkInMood: 'okay', heartRate: 85, stress: 40, solarIntensity: 15, steps: 500 } });
+  assert.equal(jitter.suggestion.id, first.suggestion.id);
+  assert.equal(calls, 1);
+
+  const moodChanged = await service.suggestions({ context: { source: 'watch', checkInMood: 'fried', heartRate: 85 } });
+  assert.notEqual(moodChanged.suggestion.id, first.suggestion.id);
+  assert.ok(['rest', 'breathe'].includes(moodChanged.suggestion.activityId));
+});
+
+test('coachLine falls back gracefully when provider omits it and copies onto booked session', async () => {
+  const { calendar } = fixture();
+  const provider = {
+    isConfigured: () => true,
+    async suggest({ candidates }) {
+      const stretch = candidates.find(c => c.activityId === 'stretch') || candidates[0];
+      return { ...stretch, quip: 'Unfold gently.', reason: 'Short break fits.', aiSource: 'grok' };
+    }
+  };
+  const service = new WellnessService(calendar, { suggestionProvider: provider });
+  const { suggestion } = await service.suggestions();
+  assert.equal(suggestion.activityId, 'stretch');
+  assert.ok(suggestion.coachLine && suggestion.coachLine.length <= 90);
+  const { activity } = await service.decide({ suggestionId: suggestion.id, decision: 'accept' });
+  assert.equal(activity.coachLine, suggestion.coachLine);
+});
+
+test('complete stores sanitized vitals, insights tracks streaks and rankings, and feedback builds personalized receipts', async t => {
+  let now = Date.parse('2026-11-12T17:00:00Z');
+  const calendar = new DemoCalendar({ now: () => now });
+  const service = new WellnessService(calendar);
+
+  // Day 1 (2026-11-12): complete walk + rate yes
+  const s1 = await service.suggestions();
+  const a1 = (await service.decide({ suggestionId: s1.suggestion.id, decision: 'accept' })).activity;
+  await service.start({ activityId: a1.id });
+  const c1 = await service.complete({
+    activityId: a1.id,
+    source: 'steps',
+    steps: 200,
+    elapsedSeconds: 480,
+    vitals: { startHr: 72, endHr: 96, startStress: 55, endStress: 38, elevationGain: 14.26, badField: 123, startHrOutOfRange: 999 }
+  });
+  assert.deepEqual(c1.activity.completion.vitals, { startHr: 72, endHr: 96, startStress: 55, endStress: 38, elevationGain: 14.3 });
+  const f1 = await service.feedback({ activityId: a1.id, helpful: 'yes' });
+  assert.equal(f1.message, 'Walks helped 1 of 1 times. Case filed!');
+
+  // Day 2 (2026-11-13): complete another walk + rate yes
+  now += 24 * 60 * MINUTE;
+  const s2 = await service.suggestions();
+  const a2 = (await service.decide({ suggestionId: s2.suggestion.id, decision: 'accept' })).activity;
+  await service.start({ activityId: a2.id });
+  await service.complete({ activityId: a2.id, source: 'steps', steps: 180, elapsedSeconds: 480, vitals: { startHr: 10 } }); // invalid vitals omitted
+  assert.equal(service.dashboard().sessions.find(s => s.id === a2.id).completion.vitals, undefined);
+  const f2 = await service.feedback({ activityId: a2.id, helpful: 'yes' });
+  assert.equal(f2.message, 'Walks helped 2 of 2 times. Case filed!');
+  assert.ok(f2.message.length <= 110);
+
+  // Day 3 (2026-11-14): complete rest + rate no
+  now += 24 * 60 * MINUTE;
+  await service.saveProfile({ preferredActivities: ['rest'] });
+  const s3 = await service.suggestions({ context: { checkInMood: 'fried' } });
+  const a3 = (await service.decide({ suggestionId: s3.suggestion.id, decision: 'accept' })).activity;
+  await service.start({ activityId: a3.id });
+  await service.complete({ activityId: a3.id, source: 'self_report', elapsedSeconds: 60 });
+  const f3 = await service.feedback({ activityId: a3.id, helpful: 'no' });
+  assert.equal(f3.message, 'Noted. We will try a different break next time.');
+
+  const ins = f3.insights;
+  assert.equal(ins.totalCompleted, 3);
+  assert.equal(ins.totalHelpful, 2);
+  assert.equal(ins.streakDays, 3);
+  assert.equal(ins.topActivity.activityId, 'walk');
+  assert.equal(ins.topActivity.helpRate, 100);
+  assert.equal(ins.byActivity.length, 2);
+  assert.equal(ins.byActivity[0].activityId, 'walk');
+  assert.equal(ins.byActivity[1].notHelpful, 1);
+  assert.equal(ins.byActivity[1].helpRate, 0);
+
+  // Yesterday-ending streak still holds on day 4 before completing anything today
+  now += 24 * 60 * MINUTE;
+  assert.equal(service.insights().streakDays, 3);
+  // Missing two days resets streak to 0
+  now += 24 * 60 * MINUTE;
+  assert.equal(service.insights().streakDays, 0);
+
+  // HTTP endpoints: watch POST action 'insights' and phone GET '/api/insights'
+  const server = createDemoServer(calendar, { wellness: service, deviceToken: 'insights-token' });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const watchInsights = await (await fetch(base, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'insights', token: 'insights-token' })
+  })).json();
+  assert.equal(watchInsights.insights.totalCompleted, 3);
+
+  assert.equal((await fetch(`${base}/api/insights`, { headers: { 'CF-Connecting-IP': '198.51.100.1' } })).status, 401);
+  const phoneInsights = await (await fetch(`${base}/api/insights`)).json();
+  assert.equal(phoneInsights.insights.totalCompleted, 3);
+  assert.equal(phoneInsights.recentSessions.length, 3);
+  assert.ok(phoneInsights.profile.goals.length > 0);
+});
+

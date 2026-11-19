@@ -2,7 +2,16 @@
   'use strict';
   const $ = selector => document.querySelector(selector);
   const goalNames = { move: 'Movement', outside: 'Time outside', breaks: 'Better breaks' };
-  const activityNames = { walk: 'Walk', stretch: 'Gentle stretch', breathe: 'Breathing break', rest: 'Quiet rest' };
+  const activityNames = {
+    walk: 'Walk',
+    stretch: 'Gentle stretch',
+    breathe: 'Breathing break',
+    rest: 'Quiet rest',
+    eyes: 'Eye reset',
+    stairs: 'Stairs',
+    sunlight: 'Sunlight'
+  };
+  const humorLabels = { gentle: 'Gentle', playful: 'Playful', cheeky: 'Cheeky', spicy: 'Cheeky' };
   const pairingLabels = { paired: 'Paired', waiting: 'Waiting for a phone', finishing: 'Code claimed — save goals', idle: 'Not paired yet' };
   let users = [];
   let selectedId = null;
@@ -26,6 +35,51 @@
   function date(value) {
     const parsed = new Date(value);
     return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  }
+
+  function percentFromRate(rate, helpful, completed) {
+    if (typeof rate === 'number' && Number.isFinite(rate)) {
+      if (rate > 1) return Math.max(0, Math.min(100, Math.round(rate)));
+      if (rate > 0 && rate <= 1 && !(rate === 1 && helpful === 0 && completed > 1)) {
+        return Math.max(0, Math.min(100, Math.round(rate * 100)));
+      }
+    }
+    return completed > 0 ? Math.max(0, Math.min(100, Math.round((helpful / completed) * 100))) : 0;
+  }
+
+  function buildProfileBadges(profile = {}) {
+    const badges = [];
+    const humor = humorLabels[profile.humor] || 'Playful';
+    badges.push(text('span', `Humor: ${humor}`, 'badge meta'));
+    if (profile.seatedOnly) {
+      badges.push(text('span', 'Seated only', 'badge seated'));
+    }
+    const maxMinutes = Number.isInteger(profile.maxBreakMinutes) ? profile.maxBreakMinutes : 8;
+    badges.push(text('span', `Max ${maxMinutes}m`, 'badge meta'));
+    const start = profile.reminderStart || '08:00';
+    const end = profile.reminderEnd || '20:00';
+    badges.push(text('span', `${start}–${end}`, 'badge meta'));
+    return badges;
+  }
+
+  function buildVitalsChips(vitals) {
+    if (!vitals || typeof vitals !== 'object') return [];
+    const chips = [];
+    if (vitals.startHr != null && vitals.endHr != null) {
+      chips.push(text('span', `HR ${vitals.startHr} → ${vitals.endHr}`, 'vital-chip'));
+    }
+    if (vitals.startStress != null && vitals.endStress != null) {
+      chips.push(text('span', `Stress ${vitals.startStress} → ${vitals.endStress}`, 'vital-chip'));
+    }
+    if (Number.isFinite(vitals.elevationGain) && vitals.elevationGain > 0) {
+      chips.push(text('span', `+${vitals.elevationGain}m climb`, 'vital-chip'));
+    }
+    return chips;
+  }
+
+  function wearerDisplayName(user) {
+    const nickname = typeof user.profile?.nickname === 'string' ? user.profile.nickname.trim() : '';
+    return nickname ? `${user.label} · ${nickname}` : user.label;
   }
 
   async function api(path, body) {
@@ -54,7 +108,8 @@
     return users.filter(user => {
       const live = user.configured || user.activeWatch || user.pairingState === 'waiting' || user.pairingState === 'finishing';
       if (!live) return false;
-      const haystack = `${user.label} ${(user.profile.goals || []).map(goal => goalNames[goal]).join(' ')} ${user.profile.additionalContext || ''}`.toLowerCase();
+      const profile = user.profile || {};
+      const haystack = `${user.label} ${profile.nickname || ''} ${profile.humor || ''} ${profile.seatedOnly ? 'seated' : ''} ${(profile.goals || []).map(goal => goalNames[goal]).join(' ')} ${profile.additionalContext || ''}`.toLowerCase();
       return haystack.includes(search);
     });
   }
@@ -86,13 +141,37 @@
       top.className = 'device-top';
       const number = text('span', user.label.replace(/\D/g, '').padStart(2, '0') || '01', 'device-number');
       const identity = document.createElement('div');
-      identity.append(text('h3', user.label, 'device-title'), text('p', user.id.slice(0, 8), 'device-id'));
+      identity.append(text('h3', wearerDisplayName(user), 'device-title'), text('p', user.id.slice(0, 8), 'device-id'));
       const state = document.createElement('div');
       state.className = 'device-state';
       const badge = text('span', pairingLabels[user.pairingState] || user.pairingState, `badge${user.configured ? ' paired' : ''}`);
       state.append(badge);
       if (user.activeWatch) state.append(text('span', 'This simulator', 'badge lamp'));
       top.append(number, identity, state);
+
+      const metaRow = document.createElement('div');
+      metaRow.className = 'meta-badges';
+      if (user.configured) {
+        metaRow.append(...buildProfileBadges(user.profile));
+      }
+
+      const insightsRow = document.createElement('div');
+      insightsRow.className = 'device-insights';
+      const insights = user.insights;
+      if (user.configured && insights) {
+        if (insights.topActivity) {
+          const topName = insights.topActivity.title || activityNames[insights.topActivity.activityId] || insights.topActivity.activityId;
+          const pct = percentFromRate(insights.topActivity.helpRate, insights.topActivity.helpful || 0, insights.topActivity.completed || 0);
+          const bestWrap = document.createElement('span');
+          bestWrap.append(document.createTextNode('Best break: '), text('strong', `${topName} (${pct}% helpful)`));
+          insightsRow.append(bestWrap);
+        }
+        if (Number.isFinite(insights.streakDays) && insights.streakDays > 0) {
+          const streakWrap = document.createElement('span');
+          streakWrap.append(document.createTextNode('Streak: '), text('strong', `${insights.streakDays}d`));
+          insightsRow.append(streakWrap);
+        }
+      }
 
       const body = document.createElement('div');
       body.className = 'device-body';
@@ -146,7 +225,11 @@
         actions.append(assign);
       }
       bottom.append(stats, actions);
-      card.append(top, body, bottom);
+
+      card.append(top);
+      if (metaRow.childElementCount) card.append(metaRow);
+      if (insightsRow.childElementCount) card.append(insightsRow);
+      card.append(body, bottom);
       card.addEventListener('click', () => {
         selectedId = user.id;
         listUsers();
@@ -161,9 +244,51 @@
     $('#user-detail').hidden = !user;
     if (!user) return;
     $('#wearer-id').textContent = user.id.slice(0, 8);
-    $('#wearer-title').textContent = user.label;
+    $('#wearer-title').textContent = wearerDisplayName(user);
     $('#wearer-state').textContent = user.activeWatch ? 'This simulator' : pairingLabels[user.pairingState];
     $('#wearer-state').className = `badge${user.configured ? ' paired' : user.activeWatch ? ' lamp' : ''}`;
+
+    const badgesEl = $('#wearer-badges');
+    if (user.configured) {
+      badgesEl.replaceChildren(...buildProfileBadges(user.profile));
+      badgesEl.hidden = false;
+    } else {
+      badgesEl.replaceChildren();
+      badgesEl.hidden = true;
+    }
+
+    const insightsEl = $('#wearer-insights');
+    const insights = user.insights;
+    if (insights && (insights.totalCompleted > 0 || insights.topActivity || insights.streakDays > 0)) {
+      const cards = [];
+      const bestCard = document.createElement('dl');
+      bestCard.className = 'insight-card highlight';
+      const bestLabel = insights.topActivity
+        ? `${insights.topActivity.title || activityNames[insights.topActivity.activityId] || insights.topActivity.activityId} (${percentFromRate(insights.topActivity.helpRate, insights.topActivity.helpful || 0, insights.topActivity.completed || 0)}%)`
+        : 'Needs more feedback';
+      bestCard.append(text('dt', 'Best break'), text('dd', bestLabel));
+      cards.push(bestCard);
+
+      const streakCard = document.createElement('dl');
+      streakCard.className = 'insight-card';
+      const streakDays = Number(insights.streakDays) || 0;
+      streakCard.append(text('dt', 'Break streak'), text('dd', `${streakDays} ${streakDays === 1 ? 'day' : 'days'}`));
+      cards.push(streakCard);
+
+      const rateCard = document.createElement('dl');
+      rateCard.className = 'insight-card';
+      const totalCompleted = Number(insights.totalCompleted) || 0;
+      const totalHelpful = Number(insights.totalHelpful) || 0;
+      rateCard.append(text('dt', 'Helpful rate'), text('dd', totalCompleted > 0 ? `${Math.round((totalHelpful / totalCompleted) * 100)}% (${totalHelpful}/${totalCompleted})` : '—'));
+      cards.push(rateCard);
+
+      insightsEl.replaceChildren(...cards);
+      insightsEl.hidden = false;
+    } else {
+      insightsEl.replaceChildren();
+      insightsEl.hidden = true;
+    }
+
     $('#wearer-updated').textContent = `Updated ${date(user.updatedAt)}`;
     $('#assign-watch').hidden = user.activeWatch;
     $('#preference-rows').replaceChildren(...user.preferences.map(item => {
@@ -176,21 +301,24 @@
     const events = user.decisions.map(item => ({
       at: item.at,
       title: `${({ accept: 'Accepted', snooze: 'Snoozed', alternative: 'Asked for another idea after' })[item.decision] || item.decision} · ${activityNames[item.activityId] || item.activityId}`,
-      note: item.start ? `Proposed for ${date(item.start)}` : ''
+      note: item.start ? `Proposed for ${date(item.start)}` : '',
+      vitals: null
     }));
     for (const session of user.sessions) {
       if (session.status === 'completed') {
         events.push({
           at: session.completedAt,
           title: `Completed · ${session.title}`,
-          note: ({ simulated_steps: 'Simulator step data', simulated_timer: 'Simulated timer', steps: 'Watch step data', timer: 'Foreground timer', self_report: 'Self-reported completion' })[session.completion?.source] || 'Completion recorded'
+          note: ({ simulated_steps: 'Simulator step data', simulated_timer: 'Simulated timer', steps: 'Watch step data', timer: 'Foreground timer', self_report: 'Self-reported completion' })[session.completion?.source] || 'Completion recorded',
+          vitals: session.completion?.vitals || null
         });
       }
       if (session.feedback) {
         events.push({
           at: session.feedback.at,
           title: `${({ yes: 'Found helpful', somewhat: 'Somewhat helpful', no: 'Not helpful' })[session.feedback.helpful]} · ${session.title}`,
-          note: 'Saved for the next suggestion.'
+          note: 'Saved for the next suggestion.',
+          vitals: null
         });
       }
     }
@@ -200,6 +328,13 @@
       const row = document.createElement('li');
       const details = document.createElement('div');
       details.append(text('div', event.title, 'event-title'), text('div', event.note, 'event-note'));
+      const chips = buildVitalsChips(event.vitals);
+      if (chips.length) {
+        const vitalsRow = document.createElement('div');
+        vitalsRow.className = 'vitals-chips';
+        vitalsRow.append(...chips);
+        details.append(vitalsRow);
+      }
       row.append(details, text('time', date(event.at), 'event-date'));
       return row;
     }));

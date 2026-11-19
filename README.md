@@ -1,87 +1,117 @@
 # Momo
 
-A native **fēnix 7 Pro / Connect IQ** wellness companion with phone onboarding and a Node backend. The calendar contains demo meetings; calendar writes and completion simulations are labeled **DEMO**.
+A small, slightly cheeky monkey that lives on your **Garmin fēnix 7 Pro** and helps you actually take breaks that work for you.
+
+Garmin watches are great at collecting numbers—steps, heart rate, stress, Body Battery—but most of the time you're left staring at a chart wondering what to do next. Momo turns those signals (plus a quick "how do you feel?" check-in) into short, guided breaks with haptics, animation, and a little humor—then tracks **break receipts** so you can see what genuinely helps.
+
+> **Heads up:** The calendar comes pre-loaded with demo meetings, and demo calendar writes or simulated completions are clearly labeled **DEMO**. Momo never claims medical outcomes or diagnoses stress—watch readings are just context alongside how you say you feel.
+
+---
+
+## On the watch
+
+![Momo on Garmin fēnix 7 Pro](docs/screenshots/watch-screens.png)
+
+- **Live watch context + 1-tap check-in:** Pulls available `ActivityMonitor` and `SensorHistory` signals (steps, move bar, heart rate, stress, Body Battery, elevation, temperature, solar) and pairs them with a quick mood check-in (`Fried`, `Okay`, or `Wired`).
+- **7 guided break types:** Walk, gentle stretch, 4-4-4 breathing pacer, quiet rest, 20-20-20 eye reset, stair climb, and sunlight break—each with custom 260×260 MIP animations and gentle wrist haptics (`Toybox.Attention`).
+- **Grok AI with honest fallback:** Uses xAI's Responses API (`grok-4.7`) to pick an eligible break, explain why it fits your calendar gap, and write a short coaching line. No API key or offline? It switches cleanly to **SCRIPTED** suggestions.
+- **Receipts on your wrist:** Open **What works** from the watch menu to see your streak, top-rated break, and per-activity helpfulness bars.
+
+---
+
+## Phone companion & break receipts
+
+Scan the QR code (or type the 4-digit code) shown on Momo when it launches—no account or password needed.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Personalization</strong><br>
+      <sub>Nickname, goals, humor vibe, break length, seated-only mode, break types, and quiet hours.</sub><br><br>
+      <img src="docs/screenshots/phone-setup.png" alt="Momo phone personalization form" width="320">
+    </td>
+    <td align="center" width="50%">
+      <strong>Your Break Receipts</strong><br>
+      <sub>Completed breaks, day streak, helpfulness bars, and before/after vitals from each break.</sub><br><br>
+      <img src="docs/screenshots/phone-receipts.png" alt="Momo phone break receipts view" width="320">
+    </td>
+  </tr>
+</table>
+
+---
+
+## The Watch Room (multi-watch admin)
+
+Open `http://127.0.0.1:8787/admin` locally (or `/admin` with your `MOMO_ADMIN_TOKEN` on a public deployment) to see every paired watch, switch which device the simulator points at, and review break ratings and vitals history.
+
+![Momo Watch Room admin dashboard](docs/screenshots/watch-room.png)
+
+---
 
 ## Run locally
 
-Requires Node 22+, Garmin Connect IQ SDK 9.1.0, its fēnix 7 Pro device profile, and a Garmin developer key.
+You'll need **Node 22+**, **Garmin Connect IQ SDK 9.1.0** with the `fenix7pro` device profile, and a Garmin developer key.
 
 ```sh
 npm install
 cp .env.example .env
 ```
 
-Keep an existing `.env` rather than overwriting it. Set `XAI_API_KEY` there to enable Grok; `XAI_MODEL` defaults to `grok-4.7`. Without a key, or when the provider fails, Momo uses **SCRIPTED** suggestions. Keys stay on the server and are excluded from Git.
+Optionally set `XAI_API_KEY` in `.env` to turn on live Grok suggestions (`XAI_MODEL` defaults to `grok-4.7`). Without it, Momo runs in **SCRIPTED** mode.
 
-Start the service in one terminal:
+Start the backend + temporary HTTPS tunnel in one terminal:
 
 ```sh
 npm run calendar:demo
 ```
 
-Wait for **HTTPS demo ready**, then launch the watch in another:
+Once you see **HTTPS demo ready**, launch the watch app in a second terminal:
 
 ```sh
 ./scripts/ciq.sh run
 ```
 
-Garmin requires HTTPS, so the local command starts a temporary Cloudflare Tunnel and configures the watch build automatically. It downloads `cloudflared` on the first macOS run; an existing binary can be supplied through `CLOUDFLARED`. Keep the service running. Restarting it changes the temporary hostname, so rebuild the watch afterward. Generated settings and the separate watch access token live in gitignored `.local/` and `resources-fenix7pro/`; saved simulator settings cannot override the current generated URL.
+Garmin requires HTTPS for web requests, so `npm run calendar:demo` spins up a temporary Cloudflare Tunnel and writes the build URL + watch access token into gitignored `.local/` and `resources-fenix7pro/`. Keep that terminal running (if you restart it, rebuild the watch so it gets the new tunnel URL).
 
-## Try the full experience
+### Watch controls
+- **START:** Get a personalized break suggestion, open action choices (`Let's go`, `Later`, `Something else`, `How I feel`, `Why this?`), or start/finish a break.
+- **UP / DOWN:** Cycle home moods or flip through detail & receipt pages.
+- **Hold UP:** Open the watch menu (`Next idea`, `Quick check-in`, `What works`, `Setup`, `Controls`).
+- **Tap Momo:** Cycle quips on the home screen.
 
-1. Momo always starts on setup: a QR on the first page, a four-digit code and setup URL on the next.
-2. Scan the QR, or open `/setup` and type the four-digit code. Choose your goals and optionally add context. No name or account details are required. New profiles use the phone's time zone automatically.
-3. Save on the phone. The watch checks every three seconds and continues once this pairing is saved. Reopen **Setup** from the watch's hold-UP menu to edit the same device; launching the app again after a completed pairing registers a new device.
-4. Press **START** on Momo for a personalized activity. UP/DOWN switches detail pages; START offers **Let's go**, **Later**, or **Something else** in a compact action picker. Hold UP opens the home menu, including **Setup**.
-5. Accepting requires confirmation before adding a demo calendar event. Later snoozes suggestions for thirty minutes. Alternatives avoid repeating the activity where possible.
-6. Start the accepted activity. The watch tracks foreground time and observed daily-step deltas. Hold UP during a demo activity for **Simulate finish**, or explicitly self-report completion.
-7. Answer whether it helped. Acceptance, completion, snooze, and helpfulness counts influence future activity ranking.
+---
 
-Walking, gentle stretching, breathing, and quiet rest are supported. Goals, saved context (up to 1,000 characters), activity history, and calendar availability inform Grok's choice and short, humorous line. Profile constraints determine eligible activities; Grok cannot invent arbitrary activities or book anything without acceptance. Updating goals or context invalidates old suggestions. Meeting titles are excluded from the model prompt. Recommendations are cached and provider requests throttled. Existing profiles keep their prior activity and accessibility preferences when using the simplified form.
+## Security & privacy notes
 
-Phone QR links and four-digit codes are one-time, expire after ten minutes, and grant a browser session scoped to one wearer. Using either invalidates the other. Short-code attempts are rate limited; only hashes are stored. That session can edit its own profile and read private demo data, but cannot invoke paid AI calls or impersonate the watch. Goals, context, feedback, and demo bookings persist on the backend across restarts; relevant profile details and aggregate feedback are included in Grok requests.
+- **One-time pairing:** QR links and 4-digit codes expire after 10 minutes, invalidate each other on use, store only SHA-256 hashes, and rate-limit guesses.
+- **Scoped sessions:** A phone browser session can only edit its own wearer's preferences and view its own break receipts—it can't trigger paid AI calls or impersonate a watch.
+- **Explicit confirmation:** Grok can only pick from server-validated calendar openings and eligible break types, never sees meeting titles, and can never book a calendar event without your tap on the watch.
 
-## Admin and separate watches
-
-Open **http://127.0.0.1:8787/admin** on the development computer. The page leads with how to register a watch. Local access opens the watch room directly; public/tunnel access requires the key in `.local/admin-token` (or `MOMO_ADMIN_TOKEN`). Admin sessions use an HttpOnly cookie; phone setup sessions do not grant admin access.
-
-Each paired watch is its own row: goals, saved context, completions, accepts, snoozes, and helpful / not-helpful ratings. Completing setup on the phone is what identifies the device — codes are one-time, and the phone cannot save goals until it claims a QR or four-digit code. **Pair another watch** mints a new device with its own QR/code; **Show on this simulator** points the current watch connection at that device. Launching Momo after a watch is already paired mints a new device automatically.
-
-Local data is stored in gitignored `.local/workspace.json`; the previous single-user `.local/demo-calendar.json` is migrated automatically on first launch. Existing profile context and activity history are preserved.
-
-The three home-screen moods and their day remarks remain selectable demo states. Activity tracking pauses when its screen is hidden; this version does not provide background tracking, sleep analysis, or verified health outcomes. Simulator completion evidence is labeled simulated. Suggestions are requested in the app; all-day background notifications are not implemented.
+---
 
 ## Deploy to Vercel
 
-Use **one Vercel project + Upstash Redis**. The function serves the phone UI, admin, and watch API; Redis persists the workspace and separate wearer profiles, QR/code sessions, suggestions, demo meetings, bookings, and feedback across cold starts.
+Momo runs as a single Vercel project backed by **Upstash Redis**:
 
-1. Import this GitHub repository into Vercel. Select **Other** as the framework preset and the repository root as the root directory. `vercel.json` routes requests to `api/index.mjs`.
-2. Add **Upstash Redis** through the project's Storage/Marketplace integration and connect it to the project. The adapter accepts `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`, or legacy `KV_REST_API_URL` / `KV_REST_API_TOKEN` names.
-3. Add `XAI_API_KEY`, optional `XAI_MODEL`, `MOMO_DEVICE_TOKEN`, and `MOMO_ADMIN_TOKEN` to Vercel's server environment. Use the local `.local/demo-device-token` and `.local/admin-token` values for the matching watch and admin. The Grok and admin keys must never go in watch resources.
-4. Set `MOMO_PUBLIC_URL` to the stable production HTTPS URL, then redeploy. Otherwise the adapter uses Vercel's system production URL. Use the public production deployment; Vercel login protection must allow the watch's API requests. Momo authenticates its own requests.
-5. Configure that deployment URL locally and rebuild:
+1. Import this repo into Vercel (framework preset: **Other**, root directory: repo root; `vercel.json` routes traffic to `api/index.mjs`).
+2. Attach an **Upstash Redis** store (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`).
+3. Set `XAI_API_KEY` (optional), `MOMO_DEVICE_TOKEN`, `MOMO_ADMIN_TOKEN`, and `MOMO_PUBLIC_URL` in Vercel's environment variables. Never put Grok or admin keys in watch resources.
+4. Point your local watch build at the deployed URL and launch:
 
 ```sh
 node scripts/calendar-url.mjs https://your-project.vercel.app
 ./scripts/ciq.sh run
 ```
 
-If changing `MOMO_DEVICE_TOKEN`, update the local `.env` with the same value before configuring/rebuilding. The deployment fails closed when credentials or persistent storage are missing. Redis leases prevent concurrent function instances from duplicating writes. Neither Vercel nor Upstash credentials are needed for the local file-backed demo.
+---
 
-Deployment configuration and mocked cold-start/storage tests are included. A live Vercel deployment still requires your Vercel project and Redis connection; a live Grok call requires a filled API key.
-
-References: [Vercel storage integrations](https://vercel.com/docs/marketplace-storage), [Upstash Vercel setup](https://upstash.com/docs/redis/howto/vercelintegration), [xAI Responses API](https://docs.x.ai/developers/rest-api-reference/inference/responses).
-
-## Verification
+## Tests & verification
 
 ```sh
-npm run calendar:test
-./scripts/ciq.sh test
-npm run calendar:smoke
-# With XAI_API_KEY configured in the running service, require a real Grok reply:
-REQUIRE_GROK=1 npm run calendar:smoke
+npm run calendar:test      # 64 Node backend, AI, sensor, onboarding & workspace tests
+./scripts/ciq.sh build     # Build bin/Momo.prg for fēnix 7 Pro (0 warnings)
+./scripts/ciq.sh test      # 16 native Connect IQ simulator tests
+npm run calendar:smoke     # End-to-end smoke test against the running local demo
 ```
 
-The Node tests cover calendar conflicts, personalization, model validation/fallback, QR access, and serverless persistence. Native tests use the simulator's fonts and graphics to verify screens, controls, QR geometry, confirmation, timers, and step resets. The smoke test requires the local demo to run and intentionally creates/completes a demo activity; it refuses live Google URLs. `REQUIRE_GROK=1` also fails if the actual suggestion uses scripted fallback. A cached successful Grok suggestion may be reused.
-
-`./scripts/ciq.sh build` creates `bin/Momo.prg`. Build artifacts, `.env`, generated connection settings, local state, and signing keys are ignored by Git. The standalone Google Apps Script bridge under `integrations/google-calendar/` is preparation for a later real-calendar phase and is not used by this demo.
+Add `REQUIRE_GROK=1 npm run calendar:smoke` to assert a real Grok reply when `XAI_API_KEY` is configured.

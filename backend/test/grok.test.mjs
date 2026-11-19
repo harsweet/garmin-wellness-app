@@ -88,3 +88,86 @@ test('additional context reaches Grok as bounded untrusted profile data with Uni
   await provider.suggest(input);
   assert.equal(JSON.parse(requestBody.input[0].content).profile.additionalContext, '');
 });
+
+test('structured schema includes coachLine and cleans/truncates it safely', async () => {
+  let requestBody;
+  const provider = new GrokSuggestions({
+    apiKey: 'test',
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return apiReply({ ...result, coachLine: '“Drop your shoulders” 🐒 '.repeat(8) });
+    }
+  });
+  const reply = await provider.suggest(input);
+  assert.ok(requestBody.text.format.schema.required.includes('coachLine'));
+  assert.equal(reply.aiSource, 'grok');
+  assert.ok(reply.coachLine.length <= 90);
+  assert.match(reply.coachLine, /^[\x20-\x7e]+$/);
+
+  const emptyCoach = new GrokSuggestions({
+    apiKey: 'test',
+    fetchImpl: async () => apiReply({ ...result, coachLine: '   ' })
+  });
+  const bad = await emptyCoach.suggest(input);
+  assert.equal(bad.aiSource, 'fallback');
+  assert.equal(bad.fallbackReason, 'invalid_response');
+  assert.ok(bad.coachLine.length > 0 && bad.coachLine.length <= 90);
+});
+
+test('fallback covers all 7 activities and honors fried checkInMood', async () => {
+  const provider = new GrokSuggestions();
+  for (const activityId of ['walk', 'stretch', 'breathe', 'rest', 'eyes', 'stairs', 'sunlight']) {
+    const reply = await provider.suggest({
+      ...input,
+      candidates: [{ slotId: 'slot-1', activityId, title: activityId, durationMinutes: 2, label: 'Now', start: '2026-11-14T21:00:00Z', end: '2026-11-14T21:02:00Z' }]
+    });
+    assert.equal(reply.aiSource, 'fallback');
+    assert.equal(reply.activityId, activityId);
+    assert.ok(reply.coachLine && reply.coachLine.length <= 90);
+    assert.match(reply.coachLine, /^[\x20-\x7e]+$/);
+  }
+  const fried = await provider.suggest({
+    ...input,
+    context: { checkInMood: 'fried' },
+    candidates: [
+      { slotId: 'slot-1', activityId: 'walk', title: 'Walk', durationMinutes: 8, label: 'Now', start: '2026-11-14T21:00:00Z', end: '2026-11-14T21:08:00Z' },
+      { slotId: 'slot-1', activityId: 'breathe', title: 'Breathe', durationMinutes: 2, label: 'Now', start: '2026-11-14T21:00:00Z', end: '2026-11-14T21:02:00Z' }
+    ]
+  });
+  assert.equal(fried.activityId, 'breathe');
+});
+
+test('boundedContext forwards bounded watch sensors and checkInMood while stripping out-of-range values', async () => {
+  let requestBody;
+  const provider = new GrokSuggestions({ apiKey: 'test', fetchImpl: async (_url, options) => { requestBody = JSON.parse(options.body); return apiReply({ ...result, coachLine: 'Breathe slow.' }); } });
+  await provider.suggest({
+    ...input,
+    context: {
+      steps: 2400, movement: 'some', energy: 'okay', source: 'watch',
+      heartRate: 78, stress: 42, bodyBattery: 65, moveBarLevel: 3, activeMinutes: 18,
+      elevationMeters: 1045.67, temperatureC: -3.24, solarIntensity: 75, checkInMood: 'wired'
+    }
+  });
+  const supplied = JSON.parse(requestBody.input[0].content).context;
+  assert.deepEqual(supplied, {
+    steps: 2400, movement: 'some', energy: 'okay', source: 'watch',
+    heartRate: 78, stress: 42, bodyBattery: 65, moveBarLevel: 3, activeMinutes: 18,
+    elevationMeters: 1045.7, temperatureC: -3.2, solarIntensity: 75, checkInMood: 'wired'
+  });
+  assert.match(requestBody.instructions, /checkInMood/);
+
+  await provider.suggest({
+    ...input,
+    context: {
+      heartRate: 10, stress: 150, bodyBattery: -1, moveBarLevel: 9, activeMinutes: 5000,
+      elevationMeters: 9500, temperatureC: -80, solarIntensity: 101, checkInMood: 'panic'
+    }
+  });
+  const invalidSupplied = JSON.parse(requestBody.input[0].content).context;
+  assert.deepEqual(invalidSupplied, {
+    steps: null, movement: 'unknown', energy: 'unknown', source: 'unknown',
+    heartRate: null, stress: null, bodyBattery: null, moveBarLevel: null, activeMinutes: null,
+    elevationMeters: null, temperatureC: null, solarIntensity: null, checkInMood: 'unknown'
+  });
+});
+
